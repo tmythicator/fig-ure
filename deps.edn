@@ -1,0 +1,21 @@
+{:paths ["src" "resources"]
+ :mvn/repos {"central" {:url "https://repo1.maven.org/maven2/"}
+             "clojars" {:url "https://repo.clojars.org/"}}
+ :deps {org.clojure/clojure {:mvn/version "1.12.5"}
+        org.clojure/core.async {:mvn/version "1.9.865"}
+        integrant/integrant {:mvn/version "1.0.1"}
+        ring/ring-core {:mvn/version "1.15.5"}
+        ring/ring-jetty-adapter {:mvn/version "1.15.5"}
+        metosin/reitit {:mvn/version "0.10.1"}
+        cheshire/cheshire {:mvn/version "6.2.0"}
+        clj-http/clj-http {:mvn/version "3.13.1"}
+        nubank/matcher-combinators {:mvn/version "3.9.1"}}
+ :aliases
+ {:dev {:extra-paths ["dev" "test"]
+        :extra-deps {integrant/repl {:mvn/version "0.5.1"}
+                     nrepl/nrepl {:mvn/version "1.7.0"}
+                     cider/cider-nrepl {:mvn/version "0.62.2"}}
+        :main-opts ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]"]}
+  :test {:extra-paths ["test"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+         :main-opts ["-m" "kaocha.runner"]}}}

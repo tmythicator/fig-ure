@@ -1,0 +1,29 @@
+{:paths ["src"]
+ :tasks
+ {dev      {:doc "Start Clojure REPL with dev dependencies"
+            :task (clojure "-M:dev")}
+
+  test     {:doc "Run tests via Kaocha"
+            :task (clojure "-M:test")}
+
+  lint     {:doc "Lint Clojure source code with clj-kondo"
+            :task (shell "clj-kondo --lint src dev test")}
+
+  fmt      {:doc "Check code formatting with cljfmt"
+            :task (shell "cljfmt check src dev test")}
+
+  fmt-fix  {:doc "Auto-fix code formatting with cljfmt"
+            :task (shell "cljfmt fix src dev test")}
+
+  outdated {:doc "Check for outdated dependencies (antq)"
+            :task (clojure "-Sdeps" "{:deps {com.github.liquidz/antq {:mvn/version \"RELEASE\"}}}" "-M" "-m" "antq.core")}
+
+  ci       {:doc "Run full CI check: linting, formatting check, and test suite"
+            :task (do
+                    (println "=== Running Linter (clj-kondo) ===")
+                    (run 'lint)
+                    (println "\n=== Checking Formatting (cljfmt) ===")
+                    (run 'fmt)
+                    (println "\n=== Running Test Suite (Kaocha) ===")
+                    (run 'test)
+                    (println "\n All CI checks passed!"))}}}

@@ -1,0 +1,37 @@
+# Clojure & Build Artifacts
+target/
+.cpcache/
+.nrepl-port
+.cider-repl
+.shadow-cljs/
+.lsp/
+.calva/
+.clj-kondo/.cache/
+.clj-kondo/.borkdude/
+out/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+secrets.edn
+config/secrets.edn
+*.pem
+*.key
+
+# Local Data Buffers & Media Outputs (ffmpeg / telemetry)
+data/
+snapshots/
+tmp/
+*.log
+logs/
+
+# IDE & Editor Artifacts
+.direnv/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
