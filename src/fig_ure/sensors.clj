@@ -7,10 +7,18 @@
 (def ^:private bme280-chip-id-reg "d0")
 (def ^:private bme280-expected-chip-id "60")
 
+(defn format-reading
+  "Formats a raw sensor reading into the internal telemetry map structure."
+  [sensor-id raw-val unit]
+  {:sensor/id        sensor-id
+   :sensor/value     raw-val
+   :sensor/unit      unit
+   :sensor/timestamp (System/currentTimeMillis)})
+
 (defn valid-percent-reading?
   "Check if a percent reading is valid (number and within reasonable range)."
   [reading]
-  (let [val (:sensor/value reading)
+  (let [val  (:sensor/value reading)
         unit (:sensor/unit reading)]
     (boolean (and (= unit :percent)
                   (number? val)
@@ -49,15 +57,16 @@
        :error/message (:err result)})))
 
 (defmethod ig/init-key :fig-ure/sensors [_ config]
-  (println "Initializing sensor reader..." config)
-  ;; Component state returned to Integrant
-
-  {:status :ready})
+  (println "[Sensors] Initializing BME280 sensor reader..." config)
+  (let [handshake (read-bme280-chip-id)]
+    (println "[Sensors] BME280 Handshake Status:" handshake)
+    {:status :ready
+     :bme280 handshake}))
 
 (defmethod ig/halt-key! :fig-ure/sensors [_ state]
-  (println "Halting sensor reader..." state))
+  (println "[Sensors] Halting sensor reader..." state))
 
 (comment
   ;; Interactive REPL scratchpad
-  (:exit {:exit 33})
+  (read-bme280-chip-id)
   (format-reading :soil-ham 12.3 :percent))
