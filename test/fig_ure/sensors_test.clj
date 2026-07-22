@@ -1,5 +1,7 @@
 (ns fig-ure.sensors-test
-  (:require [clojure.test :refer [deftest is testing are]]
+  (:require [clojure.java.io :as io]
+            [clojure.java.shell :refer [sh]]
+            [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
             [matcher-combinators.test :refer [match?]]))
 
@@ -12,10 +14,9 @@
 
 (deftest valid-percent-reading-test
   (testing "validates sensor readings (percent-unit)"
-    (let [mock-reading {:sensor/id :soil-moisture
-                        :sensor/unit :percent
+    (let [mock-reading {:sensor/id        :soil-moisture
+                        :sensor/unit      :percent
                         :sensor/timestamp (System/currentTimeMillis)}]
-
       (are [expected value]
            (= expected (sensors/valid-percent-reading?
                         (assoc mock-reading :sensor/value value)))
@@ -27,14 +28,15 @@
         false 101.0
         false ""
         false :test)))
+
   (testing "validates sensor readings (non-percent-unit)"
-    (let [mock-reading {:sensor/id :soil-moisture
-                        :sensor/unit :temperature
-                        :sensor/value 28.3
+    (let [mock-reading {:sensor/id        :soil-moisture
+                        :sensor/unit      :temperature
+                        :sensor/value     28.3
                         :sensor/timestamp (System/currentTimeMillis)}]
       (is (not (sensors/valid-percent-reading? mock-reading))))))
 
-(deftest calculate-average-percent-value
+(deftest calculate-average-percent-value-test
   (testing "calculates average over valid percent readings, ignoring invalid ones"
     (let [mock-readings [{:sensor/id :soil-moisture :sensor/unit :percent :sensor/value 100}
                          {:sensor/id :soil-moisture :sensor/unit :percent :sensor/value 120} ;; ignore
@@ -44,14 +46,30 @@
       (is (= 75 (sensors/calculate-average-percent-value mock-readings))))))
 
 (deftest parse-i2cdump-chip-id-test
-  (testing "parses valid BME280 chip ID (0x60) from raw i2cdump text output"
-    (let [sample-dump "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n00: XX 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\nd0: 60 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n"]
-      (is (match? {:status  :ok
-                   :chip-id "0x60"
-                   :valid?  true}
-                  (sensors/parse-i2cdump-chip-id sample-dump)))))
+  (testing "parses valid BME280 chip ID (0x60) from real hardware i2cdump fixture"
+    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
+      (is (match? {:status         :ok
+                   :bme280/chip-id "0x60"
+                   :bme280/valid?  true}
+                  (sensors/parse-i2cdump-chip-id hardware-fixture)))))
 
   (testing "returns error status when d0 line is missing or corrupted"
-    (is (match? {:status :error
-                 :reason :parse-failed}
-                (sensors/parse-i2cdump-chip-id "c0: 60 00 00 00 00 00\ne0: 60 00 00 00")))))
+    (is (match? {:status       :error
+                 :error/reason :parse-failed}
+                (sensors/parse-i2cdump-chip-id "corrupted text without d0 line")))))
+
+(deftest read-bme280-chip-id-test
+  (testing "reads BME280 chip ID successfully using mocked hardware shell call"
+    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
+      (with-redefs [sh (fn [& _] {:exit 0 :out hardware-fixture :err ""})]
+        (is (match? {:status         :ok
+                     :bme280/chip-id "0x60"
+                     :bme280/valid?  true}
+                    (sensors/read-bme280-chip-id))))))
+
+  (testing "handles hardware I2C read failure gracefully"
+    (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Read failed"})]
+      (is (match? {:status        :error
+                   :error/reason  :i2c-read-failed
+                   :error/message "Read failed"}
+                  (sensors/read-bme280-chip-id))))))
