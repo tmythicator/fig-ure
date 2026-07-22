@@ -20,12 +20,25 @@
    :sensor/unit unit
    :sensor/timestamp (System/currentTimeMillis)})
 
-(defn valid-reading?
-  "Check if a reading is valid (number and within reasonable range)."
+(defn valid-percent-reading?
+  "Check if a percent reading is valid (number and within reasonable range)."
   [reading]
-  (let [val (:sensor/value reading)]
-    (boolean (and (number? val) (<= 0 val 100.0)))))
+  (let [val (:sensor/value reading)
+        unit (:sensor/unit reading)]
+    (boolean (and (= unit :percent)
+                  (number? val)
+                  (<= 0 val 100.0)))))
+
+(defn calculate-average-percent-value
+  "Calculates average value over the readings from one sensor (percent unit)."
+  [readings]
+  (let [values (->> readings
+                    (filter valid-percent-reading?)
+                    (map :sensor/value))]
+    (if (seq values)
+      (/ (reduce + values) (count values))
+      0.0)))
 
 (comment
   ;; Interactive REPL scratchpad
-  (format-reading :soil-ham "asdasd" :percent))
+  (format-reading :soil-ham 12.3 :percent))
