@@ -17,8 +17,8 @@
                         :sensor/timestamp (System/currentTimeMillis)}]
 
       (are [expected value]
-                        (= expected (sensors/valid-percent-reading?
-                                     (assoc mock-reading :sensor/value value)))
+           (= expected (sensors/valid-percent-reading?
+                        (assoc mock-reading :sensor/value value)))
         true 33.1
         true 0.0
         true 100.0
@@ -42,3 +42,16 @@
                          {:sensor/id :soil-moisture :sensor/unit :celcius :sensor/value 30} ;; ignore
                          {:sensor/id :soil-moisture :sensor/unit :percent :sensor/value 75}]]
       (is (= 75 (sensors/calculate-average-percent-value mock-readings))))))
+
+(deftest parse-i2cdump-chip-id-test
+  (testing "parses valid BME280 chip ID (0x60) from raw i2cdump text output"
+    (let [sample-dump "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n00: XX 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\nd0: 60 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n"]
+      (is (match? {:status  :ok
+                   :chip-id "0x60"
+                   :valid?  true}
+                  (sensors/parse-i2cdump-chip-id sample-dump)))))
+
+  (testing "returns error status when d0 line is missing or corrupted"
+    (is (match? {:status :error
+                 :reason :parse-failed}
+                (sensors/parse-i2cdump-chip-id "c0: 60 00 00 00 00 00\ne0: 60 00 00 00")))))
