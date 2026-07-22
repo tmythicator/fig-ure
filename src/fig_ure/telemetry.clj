@@ -1,7 +1,6 @@
 (ns fig-ure.telemetry
   "Background worker for batching and pushing telemetry metrics to InfluxDB Cloud."
-  (:require [clojure.core.async :as async]
-            [integrant.core :as ig]))
+  (:require [integrant.core :as ig]))
 
 (defmethod ig/init-key :fig-ure/telemetry [_ config]
   (println "Initializing telemetry worker..." config)
