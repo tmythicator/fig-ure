@@ -9,7 +9,8 @@
         metosin/reitit {:mvn/version "0.10.1"}
         cheshire/cheshire {:mvn/version "6.2.0"}
         clj-http/clj-http {:mvn/version "3.13.1"}
-        nubank/matcher-combinators {:mvn/version "3.9.1"}}
+        nubank/matcher-combinators {:mvn/version "3.9.1"}
+        com.github.abhinavomprakash/snitch {:mvn/version "0.1.8"}}
  :aliases
  {:dev {:extra-paths ["dev" "test"]
         :extra-deps {integrant/repl {:mvn/version "0.5.1"}
