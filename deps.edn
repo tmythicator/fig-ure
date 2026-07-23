@@ -9,13 +9,13 @@
         metosin/reitit {:mvn/version "0.10.1"}
         cheshire/cheshire {:mvn/version "6.2.0"}
         clj-http/clj-http {:mvn/version "3.13.1"}
-        nubank/matcher-combinators {:mvn/version "3.9.1"}
-        snitch/snitch {:mvn/version "0.1.8"}}
+        nubank/matcher-combinators {:mvn/version "3.10.1"}}
  :aliases
  {:dev {:extra-paths ["dev" "test"]
         :extra-deps {integrant/repl {:mvn/version "0.5.1"}
                      nrepl/nrepl {:mvn/version "1.7.0"}
-                     cider/cider-nrepl {:mvn/version "0.62.2"}}
+                     cider/cider-nrepl {:mvn/version "0.62.2"}
+                     org.clojars.abhinav/snitch {:mvn/version "0.1.16"}}
         :main-opts ["-m" "nrepl.cmdline" "--bind" "0.0.0.0" "--port" "7888" "--middleware" "[cider.nrepl/cider-middleware]"]}
   :test {:extra-paths ["test"]
          :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}

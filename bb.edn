@@ -16,7 +16,7 @@
             :task (shell "cljfmt fix src dev test")}
 
   outdated {:doc "Check for outdated dependencies (antq)"
-            :task (clojure "-Sdeps" "{:deps {com.github.liquidz/antq {:mvn/version \"RELEASE\"}}}" "-M" "-m" "antq.core")}
+            :task (clojure "-Sdeps" "{:deps {com.github.liquidz/antq {:mvn/version \"RELEASE\"}}}" "-M" "-m" "antq.core" "--error-format=nil")}
 
   ci       {:doc "Run full CI check: linting, formatting check, and test suite"
             :task (do
