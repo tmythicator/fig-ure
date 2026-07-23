@@ -3,6 +3,7 @@
             [clojure.java.shell :refer [sh]]
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
+            [fig-ure.sensors.bme280 :as bme280]
             [matcher-combinators.test :refer [match?]]))
 
 (deftest format-reading-test
@@ -51,12 +52,26 @@
       (is (match? {:status         :ok
                    :bme280/chip-id "0x60"
                    :bme280/valid?  true}
-                  (sensors/parse-i2cdump-chip-id hardware-fixture)))))
+                  (bme280/parse-chip-id hardware-fixture)))))
 
   (testing "returns error status when d0 line is missing or corrupted"
     (is (match? {:status       :error
                  :error/reason :parse-failed}
-                (sensors/parse-i2cdump-chip-id "corrupted text without d0 line")))))
+                (bme280/parse-chip-id "corrupted text without d0 line")))))
+
+(deftest parse-bme280-temperature-test
+  (testing "parses raw ADC temperature bytes from real hardware i2cdump fixture"
+    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
+      (is (match? {:status :ok
+                   :reading {:sensor/id    :bme280-temperature
+                             :sensor/value 524288
+                             :sensor/unit  :raw-adc}}
+                  (bme280/parse-temperature hardware-fixture sensors/format-reading)))))
+
+  (testing "returns error status when f0 line is missing or corrupted"
+    (is (match? {:status       :error
+                 :error/reason :parse-failed}
+                (bme280/parse-temperature "corrupted text without f0 line" sensors/format-reading)))))
 
 (deftest read-bme280-chip-id-test
   (testing "reads BME280 chip ID successfully using mocked hardware shell call"
@@ -73,17 +88,3 @@
                    :error/reason  :i2c-read-failed
                    :error/message "Read failed"}
                   (sensors/read-bme280-chip-id))))))
-
-(deftest parse-bme280-temperature-test
-  (testing "parses raw ADC temperature bytes from real hardware i2cdump fixture"
-    (let [hardware-fixture (slurp (clojure.java.io/file "test/fixtures/bme280_i2cdump.txt"))]
-      (is (match? {:status :ok
-                   :reading {:sensor/id    :bme280-temperature
-                             :sensor/value 524288
-                             :sensor/unit  :raw-adc}}
-                  (sensors/parse-bme280-temperature hardware-fixture)))))
-
-  (testing "returns error status when f0 line is missing or corrupted"
-    (is (match? {:status       :error
-                 :error/reason :parse-failed}
-                (sensors/parse-bme280-temperature "corrupted text without f0 line")))))
