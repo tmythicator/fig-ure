@@ -4,6 +4,18 @@
             [fig-ure.sensors.bme280 :as bme280]
             [integrant.core :as ig]))
 
+
+(defn write-i2cset
+  "Executes i2cset command to perform a control write on chip."
+  ([chip-addr reg-addr value] (write-i2cset "1" chip-addr reg-addr value))
+  ([bus chip-addr reg-addr value]
+   (let [res (sh "i2cset" "-y" bus chip-addr reg-addr value)]
+     (if (zero? (:exit res))
+       {:status :ok}
+       {:status :error
+        :error/reason :i2c-write-failed
+        :error/message (:err res)}))))
+
 (defn fetch-i2cdump
   "Executes i2cdump command for specified address and bus (defaults to bus '1')."
   ([addr] (fetch-i2cdump "1" addr))
@@ -78,5 +90,8 @@
 
 (comment
   ;; Interactive REPL scratchpad
+  (write-i2cset bme280/i2c-addr
+                (:ctrl-meas bme280/registers)
+                (:mode-normal-x1 bme280/config))
   (read-bme280-temperature)
   (read-bme280-chip-id))
