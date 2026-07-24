@@ -8,9 +8,9 @@
 (defn round-2 [val]
   (Double/parseDouble (format "%.2f" (double val))))
 
-(defn write-i2cset
+(defn write-i2cset!
   "Executes i2cset command to perform a control write on chip."
-  ([chip-addr reg-addr value] (write-i2cset "1" chip-addr reg-addr value))
+  ([chip-addr reg-addr value] (write-i2cset! "1" chip-addr reg-addr value))
   ([bus chip-addr reg-addr value]
    (let [res (sh "i2cset" "-y" bus chip-addr reg-addr value)]
      (if (zero? (:exit res))
@@ -119,7 +119,6 @@
        (bme280/parse-calibration (:out dump))
        dump))))
 
-
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
   (fn [sensor-id _mode & _args] sensor-id))
@@ -127,19 +126,18 @@
 (defmethod set-sensor-mode! :bme280
   ([_ mode] (set-sensor-mode! :bme280 mode "1"))
   ([_ mode bus]
-   (let [hum-write (write-i2cset bus
-                                 bme280/i2c-addr
-                                 (:ctrl-hum bme280/registers)
-                                 (:hum-x1 bme280/config))
+   (let [hum-write (write-i2cset! bus
+                                  bme280/i2c-addr
+                                  (:ctrl-hum bme280/registers)
+                                  (:hum-x1 bme280/config))
          mode-byte (get bme280/mode-config-map mode)]
      (if (and (= :ok (:status hum-write)) mode-byte)
-       (write-i2cset bus
-                     bme280/i2c-addr
-                     (:ctrl-meas bme280/registers)
-                     mode-byte)
+       (write-i2cset! bus
+                      bme280/i2c-addr
+                      (:ctrl-meas bme280/registers)
+                      mode-byte)
        {:status       :error
         :error/reason :invalid-mode-or-write-failed}))))
-
 
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
@@ -159,9 +157,9 @@
 
 (comment
   ;; Interactive REPL scratchpad
-  (write-i2cset bme280/i2c-addr
-                (:ctrl-meas bme280/registers)
-                (:mode-normal-x1 bme280/config))
+  (write-i2cset! bme280/i2c-addr
+                 (:ctrl-meas bme280/registers)
+                 (:mode-normal-x1 bme280/config))
   (read-bme280-calibration)
   (read-bme280-temperature)
   (read-bme280-mode)
