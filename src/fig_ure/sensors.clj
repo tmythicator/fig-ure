@@ -1,6 +1,7 @@
 (ns fig-ure.sensors
   "Asynchronous I2C sensor reader module for soil moisture, temperature, and humidity."
   (:require [clojure.java.shell :refer [sh]]
+            [clojure.string :refer [trim]]
             [fig-ure.sensors.bme280 :as bme280]
             [integrant.core :as ig]))
 
@@ -22,7 +23,7 @@
    (let [result (sh "i2cget" "-y" bus chip-addr reg-addr)]
      (if (zero? (:exit result))
        {:status :ok
-        :out (clojure.string/trim (:out result))}
+        :out (trim (:out result))}
        {:status        :error
         :error/reason  :i2c-read-failed
         :error/message (:err result)}))))
