@@ -78,3 +78,20 @@
                    :error/reason  :i2c-read-failed
                    :error/message "Read mode failed"}
                   (sensors/read-bme280-mode))))))
+
+(deftest set-sensor-mode!-test
+  (testing "sets BME280 mode successfully by writing to ctrl-hum and ctrl-meas"
+    (with-redefs [sh (fn [& _] {:exit 0 :out "" :err ""})]
+      (is (match? {:status :ok}
+                  (sensors/set-sensor-mode! :bme280 :normal)))))
+
+  (testing "returns error status when invalid mode is supplied"
+    (is (match? {:status       :error
+                 :error/reason :invalid-mode-or-write-failed}
+                (sensors/set-sensor-mode! :bme280 :invalid-mode))))
+
+  (testing "handles write failure gracefully"
+    (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Write failed"})]
+      (is (match? {:status       :error
+                   :error/reason :invalid-mode-or-write-failed}
+                  (sensors/set-sensor-mode! :bme280 :normal))))))

@@ -25,6 +25,11 @@
                  :dig-t2 26428
                  :dig-t3 50}})
 
+(def mode-config-map
+  {:normal (:mode-normal-x1 config)
+   :sleep  (:mode-sleep config)
+   :forced (:mode-forced-x1 config)})
+
 (defn- strip-0x [s]
   (if (string/starts-with? s "0x")
     (subs s 2)
