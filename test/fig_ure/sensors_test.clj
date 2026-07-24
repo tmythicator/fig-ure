@@ -1,10 +1,9 @@
 (ns fig-ure.sensors-test
-  (:require [clojure.java.io :as io]
-            [clojure.java.shell :refer [sh]]
+  (:require [clojure.java.shell :refer [sh]]
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
-            [matcher-combinators.test :refer [match?]]
-            [fig-ure.sensors.bme280 :as bme280]))
+            [fig-ure.sensors.bme280 :as bme280]
+            [matcher-combinators.test :refer [match?]]))
 
 (deftest format-reading-test
   (testing "formats sensor reading into telemetry map structure"
@@ -47,13 +46,12 @@
       (is (= 75 (sensors/calculate-average-percent-value mock-readings))))))
 
 (deftest read-bme280-chip-id-test
-  (testing "reads BME280 chip ID successfully using mocked hardware shell call"
-    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
-      (with-redefs [sh (fn [& _] {:exit 0 :out hardware-fixture :err ""})]
-        (is (match? {:status         :ok
-                     :bme280/chip-id (:chip-val bme280/config)
-                     :bme280/valid?  true}
-                    (sensors/read-bme280-chip-id))))))
+  (testing "reads BME280 chip ID successfully using mocked i2cget shell call"
+    (with-redefs [sh (fn [& _] {:exit 0 :out "0x60" :err ""})]
+      (is (match? {:status         :ok
+                   :bme280/chip-id (:chip-val bme280/config)
+                   :bme280/valid?  true}
+                  (sensors/read-bme280-chip-id)))))
 
   (testing "handles hardware I2C read failure gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Read failed"})]
@@ -61,3 +59,22 @@
                    :error/reason  :i2c-read-failed
                    :error/message "Read failed"}
                   (sensors/read-bme280-chip-id))))))
+
+(deftest read-bme280-mode-test
+  (testing "reads current operating mode successfully for different modes"
+    (are [expected-mode hex-out]
+         (with-redefs [sh (fn [& _] {:exit 0 :out hex-out :err ""})]
+           (is (match? {:status      :ok
+                        :bme280/mode expected-mode}
+                       (sensors/read-bme280-mode))))
+      :normal "0x27"
+      :sleep "0x00"
+      :forced "0x25"
+      :unknown "0x99"))
+
+  (testing "handles hardware I2C read failure when getting mode"
+    (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Read mode failed"})]
+      (is (match? {:status        :error
+                   :error/reason  :i2c-read-failed
+                   :error/message "Read mode failed"}
+                  (sensors/read-bme280-mode))))))

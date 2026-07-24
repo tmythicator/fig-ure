@@ -5,18 +5,23 @@
             [fig-ure.sensors.bme280 :as bme280]
             [matcher-combinators.test :refer [match?]]))
 
-(deftest parse-i2cdump-chip-id-test
-  (testing "parses valid BME280 chip ID (0x60) from real hardware i2cdump fixture"
-    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
-      (is (match? {:status         :ok
-                   :bme280/chip-id "0x60"
-                   :bme280/valid?  true}
-                  (bme280/parse-chip-id hardware-fixture)))))
+(deftest decode-chip-id-test
+  (testing "decodes valid BME280 chip ID (0x60)"
+    (is (match? {:bme280/chip-id "0x60"
+                 :bme280/valid?  true}
+                (bme280/decode-chip-id "0x60"))))
 
-  (testing "returns error status when d0 line is missing or corrupted"
-    (is (match? {:status       :error
-                 :error/reason :parse-failed}
-                (bme280/parse-chip-id "corrupted text without d0 line")))))
+  (testing "invalidates mismatched chip ID"
+    (is (match? {:bme280/chip-id "0x58"
+                 :bme280/valid?  false}
+                (bme280/decode-chip-id "0x58")))))
+
+(deftest decode-mode-test
+  (testing "decodes mode hex strings into keywords"
+    (is (= :normal (bme280/decode-mode "0x27")))
+    (is (= :sleep (bme280/decode-mode "0x00")))
+    (is (= :forced (bme280/decode-mode "0x25")))
+    (is (= :unknown (bme280/decode-mode "0x99")))))
 
 (deftest parse-bme280-temperature-test
   (testing "parses raw ADC temperature bytes from real hardware i2cdump fixture"

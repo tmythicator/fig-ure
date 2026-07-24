@@ -16,6 +16,18 @@
         :error/reason :i2c-write-failed
         :error/message (:err res)}))))
 
+(defn fetch-i2cget
+  "Executes i2cget command to read a single register value from a chip."
+  ([chip-addr reg-addr] (fetch-i2cget "1" chip-addr reg-addr))
+  ([bus chip-addr reg-addr]
+   (let [result (sh "i2cget" "-y" bus chip-addr reg-addr)]
+     (if (zero? (:exit result))
+       {:status :ok
+        :out (clojure.string/trim (:out result))}
+       {:status        :error
+        :error/reason  :i2c-read-failed
+        :error/message (:err result)}))))
+
 (defn fetch-i2cdump
   "Executes i2cdump command for specified address and bus (defaults to bus '1')."
   ([addr] (fetch-i2cdump "1" addr))
@@ -54,14 +66,23 @@
       (/ (reduce + values) (count values))
       0.0)))
 
+(defn read-bme280-mode
+  "Reads current BME280 mode directly via i2cget."
+  ([] (read-bme280-mode "1"))
+  ([bus]
+   (let [res (fetch-i2cget bus bme280/i2c-addr (:ctrl-meas bme280/registers))]
+     (if (= :ok (:status res))
+       {:status :ok :bme280/mode (bme280/decode-mode (:out res))}
+       res))))
+
 (defn read-bme280-chip-id
-  "Reads BME280 chip ID register via shared fetch-i2cdump helper."
+  "Reads current BME280 chip id directly via i2cget."
   ([] (read-bme280-chip-id "1"))
   ([bus]
-   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
-     (if (= :ok (:status dump))
-       (bme280/parse-chip-id (:out dump))
-       dump))))
+   (let [res (fetch-i2cget bus bme280/i2c-addr (:chip-id bme280/registers))]
+     (if (= :ok (:status res))
+       (merge {:status :ok} (bme280/decode-chip-id (:out res)))
+       res))))
 
 (defn read-bme280-temperature
   "Reads raw ADC temperature reading from BME280 driver."
@@ -94,4 +115,5 @@
                 (:ctrl-meas bme280/registers)
                 (:mode-normal-x1 bme280/config))
   (read-bme280-temperature)
+  (read-bme280-mode)
   (read-bme280-chip-id))

@@ -25,20 +25,20 @@
     (subs s 2)
     s))
 
-(defn parse-chip-id
-  "Parses raw i2cdump output text to get the BME280 chip ID."
-  [dump-text]
-  (let [reg-prefix (strip-0x (:chip-id registers))
-        regex      (re-pattern (str reg-prefix ":\\s+([0-9a-fA-F]{2})"))
-        raw-val    (second (re-find regex dump-text))
-        chip-id    (when raw-val (str "0x" raw-val))]
-    (if chip-id
-      {:status         :ok
-       :bme280/chip-id chip-id
-       :bme280/valid?  (= chip-id (:chip-val config))}
+(defn decode-mode
+  "Decodes hex string to mode keyword."
+  [hex-str]
+  (case hex-str
+    "0x27" :normal
+    "0x00" :sleep
+    "0x25" :forced
+    :unknown))
 
-      {:status        :error
-       :error/reason :parse-failed})))
+(defn decode-chip-id
+  "Decodes raw hex chip ID string and validates against config."
+  [hex-str]
+  {:bme280/chip-id hex-str
+   :bme280/valid?  (= hex-str (:chip-val config))})
 
 (defn parse-temperature
   "Parses raw ADC temperature bytes from i2cdump output text."
