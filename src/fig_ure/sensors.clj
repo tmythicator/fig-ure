@@ -5,6 +5,9 @@
             [fig-ure.sensors.bme280 :as bme280]
             [integrant.core :as ig]))
 
+(defn round-2 [val]
+  (Double/parseDouble (format "%.2f" (double val))))
+
 (defn write-i2cset
   "Executes i2cset command to perform a control write on chip."
   ([chip-addr reg-addr value] (write-i2cset "1" chip-addr reg-addr value))
@@ -39,11 +42,21 @@
         :error/reason  :i2c-read-failed
         :error/message (:err result)}))))
 
+(defmulti format-sensor-value
+  "Dispatches formatting based on senor-id."
+  (fn [sensor-id val] sensor-id))
+
+(defmethod format-sensor-value :default [_ val]
+  val)
+
+(defmethod format-sensor-value :bme280-temperature [_ val]
+  (round-2 (bme280/compensate-temperature val (:calibration bme280/config))))
+
 (defn format-reading
   "Formats a raw sensor reading into the internal telemetry map structure."
   [sensor-id raw-val unit]
   {:sensor/id        sensor-id
-   :sensor/value     raw-val
+   :sensor/value     (format-sensor-value sensor-id raw-val)
    :sensor/unit      unit
    :sensor/timestamp (System/currentTimeMillis)})
 
@@ -90,7 +103,20 @@
   ([bus]
    (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
      (if (= :ok (:status dump))
-       (bme280/parse-temperature (:out dump) format-reading)
+       (let [parsed (bme280/parse-temperature (:out dump))]
+         (if (= :ok (:status parsed))
+           {:status :ok
+            :reading (format-reading :bme280-temperature (:reading parsed) :celcius)}
+           parsed))
+       dump))))
+
+(defn read-bme280-calibration
+  "Reads actual hardware calibration coefficients from BME280."
+  ([] (read-bme280-calibration "1"))
+  ([bus]
+   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
+     (if (= :ok (:status dump))
+       (bme280/parse-calibration (:out dump))
        dump))))
 
 ;; -----------------------------------------------------------------------------
@@ -114,6 +140,7 @@
   (write-i2cset bme280/i2c-addr
                 (:ctrl-meas bme280/registers)
                 (:mode-normal-x1 bme280/config))
+  (read-bme280-calibration)
   (read-bme280-temperature)
   (read-bme280-mode)
   (read-bme280-chip-id))
