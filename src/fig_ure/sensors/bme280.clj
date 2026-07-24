@@ -25,33 +25,6 @@
                  :dig-t2 26428
                  :dig-t3 50}})
 
-(defn parse-calibration
-  "Parses T1, T2, T3 calibration coefficients from i2cdump output text."
-  [dump-text]
-  (let [regex   (re-pattern "80:\\s+([0-9a-fA-F\\s]+)\\s{4}")
-        row-str (second (re-find regex dump-text))
-        bytes   (when row-str (string/split row-str #"\s+"))]
-    (if (and bytes (>= (count bytes) 14))
-      (let [t1-lsb (Integer/parseInt (nth bytes 8) 16)
-            t1-msb (Integer/parseInt (nth bytes 9) 16)
-            dig-t1 (+ t1-lsb (bit-shift-left t1-msb 8))
-
-            t2-lsb (Integer/parseInt (nth bytes 10) 16)
-            t2-msb (Integer/parseInt (nth bytes 11) 16)
-            dig-t2 (short (+ t2-lsb (bit-shift-left t2-msb 8)))
-
-            t3-lsb (Integer/parseInt (nth bytes 12) 16)
-            t3-msb (Integer/parseInt (nth bytes 13) 16)
-            dig-t3 (short (+ t3-lsb (bit-shift-left t3-msb 8)))]
-        {:status      :ok
-         :calibration {:dig-t1 dig-t1
-                       :dig-t2 dig-t2
-                       :dig-t3 dig-t3}})
-      {:status :error
-       :error/reason
-       :parse-calibration-failed})))
-
-
 (defn- strip-0x [s]
   (if (string/starts-with? s "0x")
     (subs s 2)

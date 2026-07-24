@@ -1,7 +1,6 @@
 (ns fig-ure.sensors.bme280-test
   (:require [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
-            [fig-ure.sensors :as sensors]
             [fig-ure.sensors.bme280 :as bme280]
             [matcher-combinators.test :refer [match?]]))
 

@@ -44,7 +44,7 @@
 
 (defmulti format-sensor-value
   "Dispatches formatting based on senor-id."
-  (fn [sensor-id val] sensor-id))
+  (fn [sensor-id _val] sensor-id))
 
 (defmethod format-sensor-value :default [_ val]
   val)
