@@ -3,7 +3,8 @@
             [clojure.java.shell :refer [sh]]
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
-            [matcher-combinators.test :refer [match?]]))
+            [matcher-combinators.test :refer [match?]]
+            [fig-ure.sensors.bme280 :as bme280]))
 
 (deftest format-reading-test
   (testing "formats sensor reading into telemetry map structure"
@@ -50,7 +51,7 @@
     (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
       (with-redefs [sh (fn [& _] {:exit 0 :out hardware-fixture :err ""})]
         (is (match? {:status         :ok
-                     :bme280/chip-id "0x60"
+                     :bme280/chip-id (:chip-val bme280/config)
                      :bme280/valid?  true}
                     (sensors/read-bme280-chip-id))))))
 
