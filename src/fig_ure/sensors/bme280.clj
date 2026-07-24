@@ -3,15 +3,21 @@
   (:require [clojure.string :as string]))
 
 (def i2c-addr "0x77")
-(def ^:private chip-id-reg "d0")
+(def ^:private chip-id-reg "0xd0")
+(def ^:private temperature-reg "0xf0")
 (def ^:private expected-chip-id "60")
-(def ^:private temperature-reg "f0")
+
+(defn- strip-0x [s]
+  (if (string/starts-with? s "0x")
+    (subs s 2)
+    s))
 
 (defn parse-chip-id
   "Parses raw i2cdump output text to get the BME280 chip ID."
   [dump-text]
-  (let [regex   (re-pattern (str chip-id-reg ":\\s+([0-9a-fA-F]{2})"))
-        chip-id (second (re-find regex dump-text))]
+  (let [reg-prefix (strip-0x chip-id-reg)
+        regex      (re-pattern (str reg-prefix ":\\s+([0-9a-fA-F]{2})"))
+        chip-id    (second (re-find regex dump-text))]
     (if chip-id
       {:status         :ok
        :bme280/chip-id (str "0x" chip-id)
@@ -22,9 +28,10 @@
 (defn parse-temperature
   "Parses raw ADC temperature bytes from i2cdump output text."
   [dump-text format-reading-fn]
-  (let [regex   (re-pattern (str temperature-reg ":\\s+([0-9a-fA-F\\s]+)\\s{4}"))
-        f0-str (second (re-find regex dump-text))
-        bytes  (when f0-str (string/split f0-str #"\s+"))]
+  (let [reg-prefix (strip-0x temperature-reg)
+        regex      (re-pattern (str reg-prefix ":\\s+([0-9a-fA-F\\s]+)\\s{4}"))
+        f0-str     (second (re-find regex dump-text))
+        bytes      (when f0-str (string/split f0-str #"\s+"))]
     (if (and bytes (>= (count bytes) 13))
       (let [msb          (Integer/parseInt (nth bytes 10) 16)
             lsb          (Integer/parseInt (nth bytes 11) 16)
