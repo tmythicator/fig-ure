@@ -4,7 +4,6 @@
             [fig-ure.sensors.bme280 :as bme280]
             [integrant.core :as ig]))
 
-
 (defn write-i2cset
   "Executes i2cset command to perform a control write on chip."
   ([chip-addr reg-addr value] (write-i2cset "1" chip-addr reg-addr value))
