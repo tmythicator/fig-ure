@@ -3,6 +3,7 @@
              "clojars" {:url "https://repo.clojars.org/"}}
  :deps {org.clojure/clojure {:mvn/version "1.12.5"}
         org.clojure/core.async {:mvn/version "1.9.865"}
+        babashka/fs {:mvn/version "0.5.34"}
         integrant/integrant {:mvn/version "1.0.1"}
         ring/ring-core {:mvn/version "1.15.5"}
         ring/ring-jetty-adapter {:mvn/version "1.15.5"}
