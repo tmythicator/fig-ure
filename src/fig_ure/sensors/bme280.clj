@@ -200,10 +200,10 @@
   ([adc-h {:keys [dig-h1 dig-h2 dig-h3 dig-h4 dig-h5 dig-h6]} t-fine]
    (let [var-h (- t-fine 76800.0)
          var-h (* (- adc-h (+ (* dig-h4 64.0) (* dig-h5 (/ var-h 16384.0))))
-                  (* (/ dig-h2 65536.0)
-                     (+ 1.0 (* (/ dig-h6 67108864.0)
-                               var-h
-                               (+ 1.0 (* (/ (or dig-h3 0) 67108864.0) var-h))))))
+                  (/ dig-h2 65536.0)
+                  (+ 1.0 (* (/ dig-h6 67108864.0)
+                            var-h
+                            (+ 1.0 (* (/ (or dig-h3 0) 67108864.0) var-h)))))
          var-h (* var-h (- 1.0 (/ (* dig-h1 var-h) 524288.0)))]
      (max 0.0 (min 100.0 var-h)))))
 

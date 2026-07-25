@@ -1,5 +1,6 @@
 (ns fig-ure.sensors-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
@@ -99,7 +100,7 @@
 
 (deftest read-bme280-readings-test
   (testing "reads all telemetry metrics (temp, pressure, humidity) atomically via i2cdump mock"
-    (let [fixture (:dump (clojure.edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))]
+    (let [fixture (:dump (edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))]
       (with-redefs [sh (fn [& _] {:exit 0 :out fixture :err ""})]
         (let [res (sensors/read-bme280-readings)]
           (is (= :ok (:status res)))
