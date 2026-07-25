@@ -21,9 +21,12 @@
    :mode-forced-x1 "0x25" ;; measure 1 time and sleep
    :mode-normal-x1 "0x27" ;; turn ON normal (temp x1 + press x1)
    ;; Calibration from Bosch Datasheet
-   :calibration {:dig-t1 28589
-                 :dig-t2 26428
-                 :dig-t3 50}})
+   :calibration {:temp  {:dig-t1 28589 :dig-t2 26428 :dig-t3 50}
+                 :press {:dig-p1 36477 :dig-p2 -10685 :dig-p3 3024
+                         :dig-p4 2855  :dig-p5 140    :dig-p6 -7
+                         :dig-p7 15500 :dig-p8 -14600 :dig-p9 6000}
+                 :hum   {:dig-h1 75    :dig-h2 360    :dig-h3 0
+                         :dig-h4 300   :dig-h5 50     :dig-h6 30}}})
 
 (def mode-config-map
   {:normal (:mode-normal-x1 config)

@@ -50,7 +50,13 @@
   val)
 
 (defmethod format-sensor-value :bme280-temperature [_ val]
-  (round-2 (bme280/compensate-temperature val (:calibration bme280/config))))
+  (round-2 (bme280/compensate-temperature val (get-in bme280/config [:calibration :temp]))))
+
+(defmethod format-sensor-value :bme280-pressure [_ val]
+  (round-2 (bme280/compensate-pressure val (get-in bme280/config [:calibration :press]))))
+
+(defmethod format-sensor-value :bme280-humidity [_ val]
+  (round-2 (bme280/compensate-humidity val (get-in bme280/config [:calibration :hum]))))
 
 (defn format-reading
   "Formats a raw sensor reading into the internal telemetry map structure."
@@ -107,6 +113,21 @@
          (if (= :ok (:status parsed))
            {:status :ok
             :reading (format-reading :bme280-temperature (:reading parsed) :celcius)}
+           parsed))
+       dump))))
+
+(defn read-bme280-readings
+  "Reads all BME280 metrics (temperature, pressure, humidity) atomically in a single I2C dump."
+  ([] (read-bme280-readings "1"))
+  ([bus]
+   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
+     (if (= :ok (:status dump))
+       (let [parsed (bme280/parse-bme280-readings (:out dump))]
+         (if (= :ok (:status parsed))
+           {:status   :ok
+            :readings [(format-reading :bme280-temperature (:raw-temp parsed) :celsius)
+                       (format-reading :bme280-pressure (:raw-press parsed) :pascal)
+                       (format-reading :bme280-humidity (:raw-humidity parsed) :percent)]}
            parsed))
        dump))))
 
