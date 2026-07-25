@@ -179,8 +179,7 @@
                  (:ctrl-meas bme280/registers)
                  (:mode-normal-x1 bme280/config))
 
-
-  ;; to snapshot
+;; to snapshot
   (let [dump (:out (fetch-i2cdump "1" bme280/i2c-addr))
         calib (:calibration (bme280/parse-calibration dump))
         raw   (bme280/parse-raw-adc dump)
