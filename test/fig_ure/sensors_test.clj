@@ -1,5 +1,6 @@
 (ns fig-ure.sensors-test
-  (:require [clojure.java.shell :refer [sh]]
+  (:require [clojure.java.io :as io]
+            [clojure.java.shell :refer [sh]]
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
             [fig-ure.sensors.bme280 :as bme280]
@@ -87,11 +88,28 @@
 
   (testing "returns error status when invalid mode is supplied"
     (is (match? {:status       :error
-                 :error/reason :invalid-mode-or-write-failed}
+                 :error/reason :invalid-mode}
                 (sensors/set-sensor-mode! :bme280 :invalid-mode))))
 
   (testing "handles write failure gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Write failed"})]
       (is (match? {:status       :error
-                   :error/reason :invalid-mode-or-write-failed}
+                   :error/reason :i2c-write-failed}
                   (sensors/set-sensor-mode! :bme280 :normal))))))
+
+(deftest read-bme280-readings-test
+  (testing "reads all telemetry metrics (temp, pressure, humidity) atomically via i2cdump mock"
+    (let [fixture (:dump (clojure.edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))]
+      (with-redefs [sh (fn [& _] {:exit 0 :out fixture :err ""})]
+        (let [res (sensors/read-bme280-readings)]
+          (is (= :ok (:status res)))
+          (is (= 3 (count (:readings res))))
+          (is (= [:bme280-temperature :bme280-pressure :bme280-humidity]
+                 (map :sensor/id (:readings res))))))))
+
+  (testing "handles I2C read failure gracefully when reading all metrics"
+    (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Dump failed"})]
+      (is (match? {:status        :error
+                   :error/reason  :i2c-read-failed
+                   :error/message "Dump failed"}
+                  (sensors/read-bme280-readings))))))

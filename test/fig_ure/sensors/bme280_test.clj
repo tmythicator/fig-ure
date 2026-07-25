@@ -1,8 +1,15 @@
 (ns fig-ure.sensors.bme280-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [fig-ure.sensors.bme280 :as bme280]
             [matcher-combinators.test :refer [match?]]))
+
+(defn- load-fixture []
+  (edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))
+
+(defn- round-2 [n]
+  (Double/parseDouble (format "%.2f" n)))
 
 (deftest decode-chip-id-test
   (testing "decodes valid BME280 chip ID (0x60)"
@@ -22,53 +29,52 @@
     (is (= :forced (bme280/decode-mode "0x25")))
     (is (= :unknown (bme280/decode-mode "0x99")))))
 
-(deftest compensate-temperature-test
-  (testing "calculates accurate temperature in Celsius using Bosch formulas"
-    (let [adc-t  539296
-          dig-t  {:dig-t1 28000 :dig-t2 26000 :dig-t3 50}]
-      (is (number? (bme280/compensate-temperature adc-t dig-t))))))
-
-(deftest parse-bme280-readings-test
-  (testing "parses raw temperature, pressure, and humidity ADC values atomically from i2cdump fixture"
-    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
-      (is (match? {:status       :ok
-                   :raw-temp     524288
-                   :raw-press    524288
-                   :raw-humidity 32768}
-                  (bme280/parse-bme280-readings hardware-fixture)))))
-
-  (testing "returns error status when f0 line is corrupted"
-    (is (match? {:status       :error
-                 :error/reason :parse-failed}
-                (bme280/parse-bme280-readings "corrupted text without f0 line")))))
-
-(deftest compensate-pressure-test
-  (testing "calculates accurate pressure in hPa using Bosch formulas"
-    (let [adc-p  415148
-          dig-p  (get-in bme280/config [:calibration :press])
-          t-fine 128000.0]
-      (is (number? (bme280/compensate-pressure adc-p dig-p t-fine))))))
-
-(deftest compensate-humidity-test
-  (testing "calculates accurate relative humidity in % using Bosch formulas"
-    (let [adc-h  28910
-          dig-h  (get-in bme280/config [:calibration :hum])
-          t-fine 128000.0]
-      (is (number? (bme280/compensate-humidity adc-h dig-h t-fine))))))
+(deftest parse-raw-adc-test
+  (testing "parses raw ADC values for pressure, temperature, and humidity matching snapshot"
+    (let [{:keys [dump raw-adc]} (load-fixture)]
+      (is (= raw-adc (bme280/parse-raw-adc dump))))))
 
 (deftest parse-calibration-test
-  (testing "parses T1..T3, P1..P9, H1..H6 calibration coefficients from i2cdump hardware fixture"
-    (let [hardware-fixture (slurp (io/file "test/fixtures/bme280_i2cdump.txt"))]
-      (is (match? {:status :ok
-                   :calibration {:temp  {:dig-t1 28589
-                                         :dig-t2 26428
-                                         :dig-t3 50}
-                                 :press {:dig-p1 36270
-                                         :dig-p2 -10712
-                                         :dig-p3 3024}}}
-                  (bme280/parse-calibration hardware-fixture)))))
+  (testing "parses T1..T3, P1..P9, H1..H6 calibration coefficients matching snapshot"
+    (let [{:keys [dump calibration]} (load-fixture)]
+      (is (match? {:status :ok :calibration calibration}
+                  (bme280/parse-calibration dump)))))
 
   (testing "returns error when 80 line is corrupted"
     (is (match? {:status       :error
                  :error/reason :parse-calibration-failed}
                 (bme280/parse-calibration "corrupted text without 80 line")))))
+
+(deftest compensate-temperature-test
+  (testing "calculates accurate temperature in Celsius matching snapshot"
+    (let [{:keys [raw-adc calibration readings]} (load-fixture)
+          res (round-2 (bme280/compensate-temperature (:raw-temp raw-adc) (:temp calibration)))]
+      (is (= (:temp readings) res)))))
+
+(deftest compensate-pressure-test
+  (testing "calculates accurate pressure in hPa matching snapshot"
+    (let [{:keys [raw-adc calibration readings]} (load-fixture)
+          t-fine (bme280/calculate-t-fine (:raw-temp raw-adc) (:temp calibration))
+          res    (round-2 (bme280/compensate-pressure (:raw-press raw-adc) (:press calibration) t-fine))]
+      (is (= (:press readings) res)))))
+
+(deftest compensate-humidity-test
+  (testing "calculates accurate relative humidity in % matching snapshot"
+    (let [{:keys [raw-adc calibration readings]} (load-fixture)
+          t-fine (bme280/calculate-t-fine (:raw-temp raw-adc) (:temp calibration))
+          res    (round-2 (bme280/compensate-humidity (:raw-hum raw-adc) (:hum calibration) t-fine))]
+      (is (= (:hum readings) res)))))
+
+(deftest parse-bme280-readings-test
+  (testing "parses raw temperature, pressure, and humidity values atomically matching snapshot"
+    (let [{:keys [dump calibration readings]} (load-fixture)
+          parsed (bme280/parse-bme280-readings dump calibration)]
+      (is (= :ok (:status parsed)))
+      (is (= (:temp readings) (round-2 (:temp parsed))))
+      (is (= (:press readings) (round-2 (:press parsed))))
+      (is (= (:hum readings) (round-2 (:hum parsed))))))
+
+  (testing "returns error status when f0 line is corrupted"
+    (is (match? {:status       :error
+                 :error/reason :parse-failed}
+                (bme280/parse-bme280-readings "corrupted text without f0 line")))))

@@ -43,20 +43,13 @@
         :error/message (:err result)}))))
 
 (defmulti format-sensor-value
-  "Dispatches formatting based on senor-id."
+  "Dispatches formatting based on sensor-id."
   (fn [sensor-id _val] sensor-id))
 
 (defmethod format-sensor-value :default [_ val]
-  val)
-
-(defmethod format-sensor-value :bme280-temperature [_ val]
-  (round-2 (bme280/compensate-temperature val (get-in bme280/config [:calibration :temp]))))
-
-(defmethod format-sensor-value :bme280-pressure [_ val]
-  (round-2 (bme280/compensate-pressure val (get-in bme280/config [:calibration :press]))))
-
-(defmethod format-sensor-value :bme280-humidity [_ val]
-  (round-2 (bme280/compensate-humidity val (get-in bme280/config [:calibration :hum]))))
+  (if (number? val)
+    (round-2 val)
+    val))
 
 (defn format-reading
   "Formats a raw sensor reading into the internal telemetry map structure."
@@ -103,34 +96,6 @@
        (merge {:status :ok} (bme280/decode-chip-id (:out res)))
        res))))
 
-(defn read-bme280-temperature
-  "Reads raw ADC temperature reading from BME280 driver."
-  ([] (read-bme280-temperature "1"))
-  ([bus]
-   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
-     (if (= :ok (:status dump))
-       (let [parsed (bme280/parse-temperature (:out dump))]
-         (if (= :ok (:status parsed))
-           {:status :ok
-            :reading (format-reading :bme280-temperature (:reading parsed) :celcius)}
-           parsed))
-       dump))))
-
-(defn read-bme280-readings
-  "Reads all BME280 metrics (temperature, pressure, humidity) atomically in a single I2C dump."
-  ([] (read-bme280-readings "1"))
-  ([bus]
-   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
-     (if (= :ok (:status dump))
-       (let [parsed (bme280/parse-bme280-readings (:out dump))]
-         (if (= :ok (:status parsed))
-           {:status   :ok
-            :readings [(format-reading :bme280-temperature (:raw-temp parsed) :celsius)
-                       (format-reading :bme280-pressure (:raw-press parsed) :pascal)
-                       (format-reading :bme280-humidity (:raw-humidity parsed) :percent)]}
-           parsed))
-       dump))))
-
 (defn read-bme280-calibration
   "Reads actual hardware calibration coefficients from BME280."
   ([] (read-bme280-calibration "1"))
@@ -140,6 +105,36 @@
        (bme280/parse-calibration (:out dump))
        dump))))
 
+(defn read-bme280-temperature
+  "Reads raw ADC temperature reading from BME280 driver."
+  ([] (read-bme280-temperature "1"))
+  ([bus]
+   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
+     (if (= :ok (:status dump))
+       (let [calib  (:calibration (read-bme280-calibration bus))
+             parsed (bme280/parse-bme280-readings (:out dump) calib)]
+         (if (= :ok (:status parsed))
+           {:status  :ok
+            :reading (format-reading :bme280-temperature (:temp parsed) :celsius)}
+           parsed))
+       dump))))
+
+(defn read-bme280-readings
+  "Reads all BME280 metrics (temperature, pressure, humidity) atomically in a single I2C dump."
+  ([] (read-bme280-readings "1"))
+  ([bus]
+   (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
+     (if (= :ok (:status dump))
+       (let [calib  (:calibration (read-bme280-calibration bus))
+             parsed (bme280/parse-bme280-readings (:out dump) calib)]
+         (if (= :ok (:status parsed))
+           {:status   :ok
+            :readings [(format-reading :bme280-temperature (:temp parsed) :celsius)
+                       (format-reading :bme280-pressure (:press parsed) :hpa)
+                       (format-reading :bme280-humidity (:hum parsed) :percent)]}
+           parsed))
+       dump))))
+
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
   (fn [sensor-id _mode & _args] sensor-id))
@@ -147,18 +142,20 @@
 (defmethod set-sensor-mode! :bme280
   ([_ mode] (set-sensor-mode! :bme280 mode "1"))
   ([_ mode bus]
-   (let [hum-write (write-i2cset! bus
-                                  bme280/i2c-addr
-                                  (:ctrl-hum bme280/registers)
-                                  (:hum-x1 bme280/config))
-         mode-byte (get bme280/mode-config-map mode)]
-     (if (and (= :ok (:status hum-write)) mode-byte)
-       (write-i2cset! bus
-                      bme280/i2c-addr
-                      (:ctrl-meas bme280/registers)
-                      mode-byte)
+   (let [{:keys [hum meas]} (get bme280/mode-config-map mode)]
+     (if (and hum meas)
+       (let [hum-res (write-i2cset! bus
+                                    bme280/i2c-addr
+                                    (:ctrl-hum bme280/registers)
+                                    hum)]
+         (if (= :ok (:status hum-res))
+           (write-i2cset! bus
+                          bme280/i2c-addr
+                          (:ctrl-meas bme280/registers)
+                          meas)
+           hum-res))
        {:status       :error
-        :error/reason :invalid-mode-or-write-failed}))))
+        :error/reason :invalid-mode}))))
 
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
@@ -181,6 +178,29 @@
   (write-i2cset! bme280/i2c-addr
                  (:ctrl-meas bme280/registers)
                  (:mode-normal-x1 bme280/config))
+
+
+  ;; to snapshot
+  (let [dump (:out (fetch-i2cdump "1" bme280/i2c-addr))
+        calib (:calibration (bme280/parse-calibration dump))
+        raw   (bme280/parse-raw-adc dump)
+        readings (bme280/parse-bme280-readings dump calib)]
+    {:dump dump
+     :raw-adc raw
+     :calibration calib
+     :readings {:temp (round-2 (:temp readings))
+                :press (round-2 (:press readings))
+                :hum (round-2 (:hum readings))}})
+
+  (:out (fetch-i2cdump "1" bme280/i2c-addr))
+  (read-bme280-readings)
+  (read-bme280-calibration)
+
+  (fetch-i2cdump "0x77")
+  (get-in (read-bme280-calibration) [:calibration :press :dig-p1])
+
+  (set-sensor-mode! :bme280 :normal)
+  (read-bme280-readings)
   (read-bme280-calibration)
   (read-bme280-temperature)
   (read-bme280-mode)
