@@ -192,15 +192,11 @@
                 :press (round-2 (:press readings))
                 :hum (round-2 (:hum readings))}})
 
-  (:out (fetch-i2cdump "1" bme280/i2c-addr))
-  (read-bme280-readings)
-  (read-bme280-calibration)
-
-  (fetch-i2cdump "0x77")
-  (get-in (read-bme280-calibration) [:calibration :press :dig-p1])
 
   (set-sensor-mode! :bme280 :normal)
-  (read-bme280-readings)
+  (time (fetch-i2cdump "1" bme280/i2c-addr))
+  (:out (fetch-i2cdump "1" bme280/i2c-addr))
+  (time (read-bme280-readings))
   (read-bme280-calibration)
   (read-bme280-temperature)
   (read-bme280-mode)
