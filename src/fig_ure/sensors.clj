@@ -192,7 +192,6 @@
                 :press (round-2 (:press readings))
                 :hum (round-2 (:hum readings))}})
 
-
   (set-sensor-mode! :bme280 :normal)
   (time (fetch-i2cdump "1" bme280/i2c-addr))
   (:out (fetch-i2cdump "1" bme280/i2c-addr))

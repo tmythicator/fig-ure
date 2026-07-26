@@ -23,28 +23,15 @@
   ([buf-size]
    (async/chan (async/sliding-buffer buf-size))))
 
-(defn- start-sensor-producer!
-  [out-chan stop-chan interval-ms]
+(defn- start-generic-producer!
+  [name out-chan stop-chan interval-ms produce-fn trans-fn]
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
       (if (= port stop-chan)
-        (println "[Sensor Producer] Received stop-signal. Exiting loop.")
-        (let [res (sensors/read-bme280-readings)]
+        (println "[" name " Producer] Received stop-signal. Exiting loop.")
+        (let [res (produce-fn)]
           (when (= (:status res) :ok)
-            (async/>! out-chan (:readings res)))
-          (recur))))))
-
-(defn- start-camera-producer!
-  [out-chan stop-chan interval-ms]
-  (async/go-loop []
-    (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
-      (if (= port stop-chan)
-        (println "[Camera Producer] Received stop-signal. Exiting loop.")
-        (let [res (stream/take-snapshot!)]
-          (when (= (:status res) :ok)
-            (async/>! out-chan {:event/type :camera-snapshot
-                                :file-path (:file-path res)
-                                :timestamp (:timestamp res)}))
+            (async/>! out-chan (trans-fn res)))
           (recur))))))
 
 (defn- start-telemetry-pipeline!
@@ -52,8 +39,18 @@
   (let [stop-chan (async/chan)
         camera-chan (create-camera-chan (:camera-buf-size sys-config))
         sensor-chan (create-sensor-chan (:sensor-buf-size sys-config))]
-    (start-camera-producer! camera-chan stop-chan (:camera-interval-ms sys-config))
-    (start-sensor-producer! sensor-chan stop-chan (:sensor-interval-ms sys-config))
+
+    (start-generic-producer! "Sensor" sensor-chan stop-chan
+                             (:sensor-interval-ms sys-config)
+                             sensors/read-bme280-readings
+                             :readings)
+
+    (start-generic-producer! "Camera" camera-chan stop-chan
+                             (:camera-interval-ms sys-config)
+                             stream/take-snapshot!
+                             (fn [res]      {:event/type :camera-snapshot
+                                             :file-path (:file-path res)
+                                             :timestamp (:timestamp res)}))
     {:status :ready
      :stop-chan stop-chan
      :camera-chan camera-chan
