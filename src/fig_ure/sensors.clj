@@ -3,6 +3,7 @@
   (:require [clojure.java.shell :refer [sh]]
             [clojure.string :refer [trim]]
             [fig-ure.sensors.bme280 :as bme280]
+            ;; [snitch.core :refer [defn*]]
             [integrant.core :as ig]))
 
 (defn round-2 [val]
