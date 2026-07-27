@@ -15,3 +15,10 @@
   (if (number? n)
     (Double/parseDouble (format "%.2f" n))
     n))
+
+(defn parse-hex
+  "Safely parses a hex string (with or without '0x' prefix) into an integer."
+  [s]
+  (try
+    (Integer/parseInt (strip-0x s) 16)
+    (catch Exception _ nil)))

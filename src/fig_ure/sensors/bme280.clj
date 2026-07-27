@@ -1,6 +1,7 @@
 (ns fig-ure.sensors.bme280
   "Hardware I/O driver and pure text parsers for Bosch BME280 I2C sensor."
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [fig-ure.util :as util]))
 
 ;; =============================================================================
 ;; 1. CONSTANTS & CONFIG
@@ -42,20 +43,23 @@
    :sleep   {:hum (:hum-x1 config)  :meas (:mode-sleep config)}
    :forced  {:hum (:hum-x1 config)  :meas (:mode-forced-x1 config)}})
 
-(defn decode-mode
-  "Decodes hex string to mode keyword."
-  [hex-str]
-  (case (string/lower-case hex-str)
-    ("0x27" "0xb7" "0x3f") :normal
-    "0x00"                :sleep
-    ("0x25" "0x26")       :forced
-    :unknown))
-
 (defn decode-chip-id
-  "Decodes raw hex chip ID string and validates against config."
-  [hex-str]
-  {:bme280/chip-id hex-str
-   :bme280/valid?  (= hex-str (:chip-val config))})
+  "Decodes raw chip ID string from BME280 driver."
+  [raw-hex]
+  (let [clean-val (util/strip-0x (string/trim (or raw-hex "")))]
+    {:bme280/chip-id (str "0x" clean-val)
+     :bme280/valid?  (= clean-val (util/strip-0x (:chip-val config)))}))
+
+(defn decode-mode
+  "Decodes ctrl-meas hex register value into sensor mode keyword."
+  [mode-hex]
+  (let [clean-val (util/strip-0x (string/trim (or mode-hex "")))]
+    (cond
+      (= clean-val (util/strip-0x (:mode-normal-x16 config))) :normal
+      (= clean-val (util/strip-0x (:mode-normal-x1 config)))  :normal
+      (= clean-val (util/strip-0x (:mode-sleep config)))      :sleep
+      (= clean-val (util/strip-0x (:mode-forced-x1 config)))  :forced
+      :else :unknown)))
 
 ;; =============================================================================
 ;; 2. RAW I2C LINE PARSERS
@@ -68,35 +72,35 @@
     (string/split row-str #"\s+")))
 
 (defn- parse-temp-calib [b80]
-  (let [t1-lsb (Integer/parseInt (nth b80 8) 16)
-        t1-msb (Integer/parseInt (nth b80 9) 16)
-        t2-lsb (Integer/parseInt (nth b80 10) 16)
-        t2-msb (Integer/parseInt (nth b80 11) 16)
-        t3-lsb (Integer/parseInt (nth b80 12) 16)
-        t3-msb (Integer/parseInt (nth b80 13) 16)]
+  (let [t1-lsb (util/parse-hex (nth b80 8))
+        t1-msb (util/parse-hex (nth b80 9))
+        t2-lsb (util/parse-hex (nth b80 10))
+        t2-msb (util/parse-hex (nth b80 11))
+        t3-lsb (util/parse-hex (nth b80 12))
+        t3-msb (util/parse-hex (nth b80 13))]
     {:dig-t1 (+ t1-lsb (bit-shift-left t1-msb 8))
      :dig-t2 (unchecked-short (+ t2-lsb (bit-shift-left t2-msb 8)))
      :dig-t3 (unchecked-short (+ t3-lsb (bit-shift-left t3-msb 8)))}))
 
 (defn- parse-press-calib [b80 b90]
-  (let [p1-lsb (Integer/parseInt (nth b80 14) 16)
-        p1-msb (Integer/parseInt (nth b80 15) 16)
-        p2-lsb (Integer/parseInt (nth b90 0) 16)
-        p2-msb (Integer/parseInt (nth b90 1) 16)
-        p3-lsb (Integer/parseInt (nth b90 2) 16)
-        p3-msb (Integer/parseInt (nth b90 3) 16)
-        p4-lsb (Integer/parseInt (nth b90 4) 16)
-        p4-msb (Integer/parseInt (nth b90 5) 16)
-        p5-lsb (Integer/parseInt (nth b90 6) 16)
-        p5-msb (Integer/parseInt (nth b90 7) 16)
-        p6-lsb (Integer/parseInt (nth b90 8) 16)
-        p6-msb (Integer/parseInt (nth b90 9) 16)
-        p7-lsb (Integer/parseInt (nth b90 10) 16)
-        p7-msb (Integer/parseInt (nth b90 11) 16)
-        p8-lsb (Integer/parseInt (nth b90 12) 16)
-        p8-msb (Integer/parseInt (nth b90 13) 16)
-        p9-lsb (Integer/parseInt (nth b90 14) 16)
-        p9-msb (Integer/parseInt (nth b90 15) 16)]
+  (let [p1-lsb (util/parse-hex (nth b80 14))
+        p1-msb (util/parse-hex (nth b80 15))
+        p2-lsb (util/parse-hex (nth b90 0))
+        p2-msb (util/parse-hex (nth b90 1))
+        p3-lsb (util/parse-hex (nth b90 2))
+        p3-msb (util/parse-hex (nth b90 3))
+        p4-lsb (util/parse-hex (nth b90 4))
+        p4-msb (util/parse-hex (nth b90 5))
+        p5-lsb (util/parse-hex (nth b90 6))
+        p5-msb (util/parse-hex (nth b90 7))
+        p6-lsb (util/parse-hex (nth b90 8))
+        p6-msb (util/parse-hex (nth b90 9))
+        p7-lsb (util/parse-hex (nth b90 10))
+        p7-msb (util/parse-hex (nth b90 11))
+        p8-lsb (util/parse-hex (nth b90 12))
+        p8-msb (util/parse-hex (nth b90 13))
+        p9-lsb (util/parse-hex (nth b90 14))
+        p9-msb (util/parse-hex (nth b90 15))]
     {:dig-p1 (+ p1-lsb (bit-shift-left p1-msb 8))
      :dig-p2 (unchecked-short (+ p2-lsb (bit-shift-left p2-msb 8)))
      :dig-p3 (unchecked-short (+ p3-lsb (bit-shift-left p3-msb 8)))
@@ -108,25 +112,25 @@
      :dig-p9 (unchecked-short (+ p9-lsb (bit-shift-left p9-msb 8)))}))
 
 (defn- parse-hum-calib [ba0 be0]
-  (if (and be0 (>= (count be0) 8))
-    (let [dig-h1 (if (and ba0 (>= (count ba0) 2))
-                   (Integer/parseInt (nth ba0 1) 16)
-                   (get-in config [:calibration :hum :dig-h1]))
-          h2-lsb (Integer/parseInt (nth be0 1) 16)
-          h2-msb (Integer/parseInt (nth be0 2) 16)
-          dig-h2 (unchecked-short (+ h2-lsb (bit-shift-left h2-msb 8)))
-          dig-h3 (Integer/parseInt (nth be0 3) 16)
-          h4-msb (Integer/parseInt (nth be0 4) 16)
-          h4-lsb (Integer/parseInt (nth be0 5) 16)
-          dig-h4 (unchecked-short (bit-or (bit-shift-left h4-msb 4) (bit-and h4-lsb 0x0F)))
-          h5-msb (Integer/parseInt (nth be0 6) 16)
-          h5-lsb (Integer/parseInt (nth be0 5) 16)
-          dig-h5 (unchecked-short (bit-or (bit-shift-left h5-msb 4) (bit-shift-right h5-lsb 4)))
-          h6-val (Integer/parseInt (nth be0 7) 16)
-          dig-h6 (byte (unchecked-byte h6-val))]
-      {:dig-h1 dig-h1 :dig-h2 dig-h2 :dig-h3 dig-h3
-       :dig-h4 dig-h4 :dig-h5 dig-h5 :dig-h6 dig-h6})
-    (get-in config [:calibration :hum])))
+  (let [h1     (util/parse-hex (nth ba0 1))
+        h2-lsb (util/parse-hex (nth be0 1))
+        h2-msb (util/parse-hex (nth be0 2))
+        h2     (unchecked-short (+ h2-lsb (bit-shift-left h2-msb 8)))
+        h3     (util/parse-hex (nth be0 3))
+        h4-msb (util/parse-hex (nth be0 4))
+        h4-lsb (util/parse-hex (nth be0 5))
+        h4     (unchecked-short (bit-or (bit-shift-left h4-msb 4) (bit-and h4-lsb 0x0F)))
+        h5-msb (util/parse-hex (nth be0 6))
+        h5-lsb (util/parse-hex (nth be0 5))
+        h5     (unchecked-short (bit-or (bit-shift-left h5-msb 4) (bit-shift-right (bit-and h5-lsb 0xF0) 4)))
+        h6-val (util/parse-hex (nth be0 7))
+        h6     (byte (unchecked-byte h6-val))]
+    {:dig-h1 h1
+     :dig-h2 h2
+     :dig-h3 h3
+     :dig-h4 h4
+     :dig-h5 h5
+     :dig-h6 h6}))
 
 ;; =============================================================================
 ;; 3. CALIBRATION & READINGS PARSERS
@@ -203,18 +207,18 @@
      (max 0.0 (min 100.0 var-h)))))
 
 (defn parse-raw-adc
-  "Parses raw ADC values for pressure, temperature, and humidity from raw i2cdump f0 line bytes."
+  "Parses raw ADC values for pressure, temperature, and humidity from line f0 of i2cdump."
   [dump-text]
   (when-let [bytes (parse-row-bytes dump-text "f0")]
     (when (>= (count bytes) 15)
-      (let [p-msb  (Integer/parseInt (nth bytes 7) 16)
-            p-lsb  (Integer/parseInt (nth bytes 8) 16)
-            p-xlsb (Integer/parseInt (nth bytes 9) 16)
-            t-msb  (Integer/parseInt (nth bytes 10) 16)
-            t-lsb  (Integer/parseInt (nth bytes 11) 16)
-            t-xlsb (Integer/parseInt (nth bytes 12) 16)
-            h-msb  (Integer/parseInt (nth bytes 13) 16)
-            h-lsb  (Integer/parseInt (nth bytes 14) 16)]
+      (let [p-msb  (util/parse-hex (nth bytes 7))
+            p-lsb  (util/parse-hex (nth bytes 8))
+            p-xlsb (util/parse-hex (nth bytes 9))
+            t-msb  (util/parse-hex (nth bytes 10))
+            t-lsb  (util/parse-hex (nth bytes 11))
+            t-xlsb (util/parse-hex (nth bytes 12))
+            h-msb  (util/parse-hex (nth bytes 13))
+            h-lsb  (util/parse-hex (nth bytes 14))]
         {:raw-press (bit-or (bit-shift-left p-msb 12)
                             (bit-shift-left p-lsb 4)
                             (bit-shift-right p-xlsb 4))
