@@ -20,13 +20,16 @@
         :error/message (:err res)}))))
 
 (defn fetch-i2cget
-  "Executes i2cget command to read a single register value from a chip."
+  "Executes i2cget command to read register value(s) from a chip."
   ([chip-addr reg-addr] (fetch-i2cget "1" chip-addr reg-addr))
-  ([bus chip-addr reg-addr]
-   (let [result (sh "i2cget" "-y" bus chip-addr reg-addr)]
+  ([bus chip-addr reg-addr] (fetch-i2cget bus chip-addr reg-addr nil nil))
+  ([bus chip-addr reg-addr mode len]
+   (let [result (if (and mode len)
+                  (sh "i2cget" "-y" bus chip-addr reg-addr mode (str len))
+                  (sh "i2cget" "-y" bus chip-addr reg-addr))]
      (if (zero? (:exit result))
        {:status :ok
-        :out (string/trim (:out result))}
+        :out    (string/trim (:out result))}
        {:status        :error
         :error/reason  :i2c-read-failed
         :error/message (:err result)}))))
@@ -78,22 +81,26 @@
       (/ (reduce + values) (count values))
       0.0)))
 
+;; =============================================================================
+;; 2. BME280 READERS
+;; =============================================================================
+
+(defn read-bme280-chip-id
+  "Reads and validates the BME280 chip ID via i2cget."
+  ([] (read-bme280-chip-id "1"))
+  ([bus]
+   (let [res (fetch-i2cget bus bme280/i2c-addr (:chip-id bme280/registers))]
+     (if (= :ok (:status res))
+       (assoc (bme280/decode-chip-id (:out res)) :status :ok)
+       res))))
+
 (defn read-bme280-mode
-  "Reads current BME280 mode directly via i2cget."
+  "Reads current BME280 sensor mode from ctrl_meas register."
   ([] (read-bme280-mode "1"))
   ([bus]
    (let [res (fetch-i2cget bus bme280/i2c-addr (:ctrl-meas bme280/registers))]
      (if (= :ok (:status res))
        {:status :ok :bme280/mode (bme280/decode-mode (:out res))}
-       res))))
-
-(defn read-bme280-chip-id
-  "Reads current BME280 chip id directly via i2cget."
-  ([] (read-bme280-chip-id "1"))
-  ([bus]
-   (let [res (fetch-i2cget bus bme280/i2c-addr (:chip-id bme280/registers))]
-     (if (= :ok (:status res))
-       (merge {:status :ok} (bme280/decode-chip-id (:out res)))
        res))))
 
 (defn read-bme280-calibration
@@ -142,14 +149,13 @@
   ([bus base-key offset-key bytes-len parse-fn]
    (let [base-hex   (format "0x%02X" (get seesaw/base-registers base-key))
          offset-hex (format "0x%02X" (get seesaw/function-offsets offset-key))
-         set-res    (sh "i2cset" "-y" bus seesaw/i2c-addr base-hex offset-hex)
-         get-res    (sh "i2cget" "-y" bus seesaw/i2c-addr "0x00" "i" (str bytes-len))]
-     (if (and (zero? (:exit set-res)) (zero? (:exit get-res)))
-       (let [raw-bytes (string/split (string/trim (:out get-res)) #"\s+")]
-         (parse-fn raw-bytes))
-       {:status        :error
-        :error/reason  :i2c-read-failed
-        :error/message (str (:err set-res) " " (:err get-res))}))))
+         set-res    (write-i2cset! bus seesaw/i2c-addr base-hex offset-hex)]
+     (if (= :ok (:status set-res))
+       (let [get-res (fetch-i2cget bus seesaw/i2c-addr "0x00" "i" bytes-len)]
+         (if (= :ok (:status get-res))
+           (parse-fn (string/split (:out get-res) #"\s+"))
+           get-res))
+       set-res))))
 
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
