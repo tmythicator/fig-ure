@@ -26,7 +26,7 @@
    (let [result (sh "i2cget" "-y" bus chip-addr reg-addr)]
      (if (zero? (:exit result))
        {:status :ok
-        :out (trim (:out result))}
+        :out (string/trim (:out result))}
        {:status        :error
         :error/reason  :i2c-read-failed
         :error/message (:err result)}))))
@@ -134,6 +134,22 @@
                        (format-reading :bme280-humidity (:hum parsed) :percent)]}
            parsed))
        dump))))
+
+(defn read-seesaw-soil-reading
+  "Generic reader for Seesaw Soil metrics (moisture or temperature)."
+  ([base-key offset-key bytes-len parse-fn]
+   (read-seesaw-soil-reading "1" base-key offset-key bytes-len parse-fn))
+  ([bus base-key offset-key bytes-len parse-fn]
+   (let [base-hex   (format "0x%02X" (get seesaw/base-registers base-key))
+         offset-hex (format "0x%02X" (get seesaw/function-offsets offset-key))
+         set-res    (sh "i2cset" "-y" bus seesaw/i2c-addr base-hex offset-hex)
+         get-res    (sh "i2cget" "-y" bus seesaw/i2c-addr "0x00" "i" (str bytes-len))]
+     (if (and (zero? (:exit set-res)) (zero? (:exit get-res)))
+       (let [raw-bytes (string/split (string/trim (:out get-res)) #"\s+")]
+         (parse-fn raw-bytes))
+       {:status        :error
+        :error/reason  :i2c-read-failed
+        :error/message (str (:err set-res) " " (:err get-res))}))))
 
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
