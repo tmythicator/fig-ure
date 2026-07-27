@@ -42,11 +42,6 @@
    :sleep   {:hum (:hum-x1 config)  :meas (:mode-sleep config)}
    :forced  {:hum (:hum-x1 config)  :meas (:mode-forced-x1 config)}})
 
-(defn strip-0x [s]
-  (if (string/starts-with? s "0x")
-    (subs s 2)
-    s))
-
 (defn decode-mode
   "Decodes hex string to mode keyword."
   [hex-str]

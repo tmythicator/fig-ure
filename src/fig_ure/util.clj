@@ -1,0 +1,17 @@
+(ns fig-ure.util
+  "Common pure utility functions for string formatting, math rounding, and byte manipulation."
+  (:require [clojure.string :as string]))
+
+(defn strip-0x
+  "Strips leading '0x' or '0X' prefix from a hex string."
+  [s]
+  (if (and (string? s) (string/starts-with? (string/lower-case s) "0x"))
+    (subs s 2)
+    s))
+
+(defn round-2
+  "Rounds a floating point number to 2 decimal places."
+  [n]
+  (if (number? n)
+    (Double/parseDouble (format "%.2f" n))
+    n))

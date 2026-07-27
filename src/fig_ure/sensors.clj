@@ -1,13 +1,12 @@
 (ns fig-ure.sensors
   "Asynchronous I2C sensor reader module for soil moisture, temperature, and humidity."
-  (:require [clojure.java.shell :refer [sh]]
-            [clojure.string :refer [trim]]
-            [fig-ure.sensors.bme280 :as bme280]
-            ;; [snitch.core :refer [defn*]]
-            [integrant.core :as ig]))
-
-(defn round-2 [val]
-  (Double/parseDouble (format "%.2f" (double val))))
+  (:require
+   [clojure.java.shell :refer [sh]]
+   [clojure.string :as string]
+   [fig-ure.sensors.bme280 :as bme280] ;; [snitch.core :refer [defn*]]
+   [fig-ure.sensors.seesaw :as seesaw]
+   [fig-ure.util :refer [round-2]]
+   [integrant.core :as ig]))
 
 (defn write-i2cset!
   "Executes i2cset command to perform a control write on chip."
