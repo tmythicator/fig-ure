@@ -173,6 +173,32 @@
        {:status       :error
         :error/reason :invalid-mode}))))
 
+(defmulti read-sensor-readings
+  "Reader for different hardware sensors."
+  (fn [sensor-id & _args] sensor-id))
+
+(defmethod read-sensor-readings :bme280
+  ([_] (read-sensor-readings :bme280 "1"))
+  ([_ bus]
+   (read-bme280-readings bus)))
+
+(defmethod read-sensor-readings :seesaw-soil-moisture
+  ([_] (read-sensor-readings :seesaw-soil-moisture "1"))
+  ([_ bus]
+   (let [res (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture)]
+     (if (= :ok (:status res))
+       {:status  :ok
+        :reading (format-reading :soil-moisture (:moisture res) :capacitive)}
+       res))))
+
+(defmethod read-sensor-readings :seesaw-soil-temperature
+  ([_] (read-sensor-readings :seesaw-soil-temperature "1"))
+  ([_ bus]
+   (let [res (read-seesaw-soil-reading bus :status :temperature 4 seesaw/parse-soil-temperature)]
+     (if (= :ok (:status res))
+       {:status  :ok
+        :reading (format-reading :soil-temperature (:temperature res) :celsius)}
+       res))))
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
 ;; -----------------------------------------------------------------------------
@@ -195,7 +221,7 @@
                  (:ctrl-meas bme280/registers)
                  (:mode-normal-x1 bme280/config))
 
-;; to snapshot
+  ;; to snapshot
   (let [dump (:out (fetch-i2cdump "1" bme280/i2c-addr))
         calib (:calibration (bme280/parse-calibration dump))
         raw   (bme280/parse-raw-adc dump)
@@ -211,6 +237,11 @@
   (time (fetch-i2cdump "1" bme280/i2c-addr))
   (:out (fetch-i2cdump "1" bme280/i2c-addr))
   (time (read-bme280-readings))
+
+  (read-sensor-readings :bme280)
+  (read-sensor-readings :seesaw-soil-moisture)
+  (read-sensor-readings :seesaw-soil-temperature)
+
   (read-bme280-calibration)
   (read-bme280-temperature)
   (read-bme280-mode)
