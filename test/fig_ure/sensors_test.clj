@@ -53,14 +53,14 @@
       (is (match? {:status         :ok
                    :bme280/chip-id (:chip-val bme280/config)
                    :bme280/valid?  true}
-                  (sensors/read-bme280-chip-id)))))
+                  (#'sensors/read-bme280-chip-id)))))
 
   (testing "handles hardware I2C read failure gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Read failed"})]
       (is (match? {:status        :error
                    :error/reason  :i2c-read-failed
                    :error/message "Read failed"}
-                  (sensors/read-bme280-chip-id))))))
+                  (#'sensors/read-bme280-chip-id))))))
 
 (deftest read-bme280-mode-test
   (testing "reads current operating mode successfully for different modes"
@@ -68,7 +68,7 @@
          (with-redefs [sh (fn [& _] {:exit 0 :out hex-out :err ""})]
            (is (match? {:status      :ok
                         :bme280/mode expected-mode}
-                       (sensors/read-bme280-mode))))
+                       (#'sensors/read-bme280-mode))))
       :normal "0x27"
       :sleep "0x00"
       :forced "0x25"
@@ -79,7 +79,7 @@
       (is (match? {:status        :error
                    :error/reason  :i2c-read-failed
                    :error/message "Read mode failed"}
-                  (sensors/read-bme280-mode))))))
+                  (#'sensors/read-bme280-mode))))))
 
 (deftest set-sensor-mode!-test
   (testing "sets BME280 mode successfully by writing to ctrl-hum and ctrl-meas"

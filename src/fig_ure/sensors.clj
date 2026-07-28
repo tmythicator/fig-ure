@@ -8,7 +8,7 @@
    [fig-ure.util :refer [round-2]]
    [integrant.core :as ig]))
 
-(defn write-i2cset!
+(defn- write-i2cset!
   "Executes i2cset command to perform a control write on chip."
   ([chip-addr reg-addr value] (write-i2cset! "1" chip-addr reg-addr value))
   ([bus chip-addr reg-addr value]
@@ -19,7 +19,7 @@
         :error/reason :i2c-write-failed
         :error/message (:err res)}))))
 
-(defn fetch-i2cget
+(defn- fetch-i2cget
   "Executes i2cget command to read register value(s) from a chip."
   ([chip-addr reg-addr] (fetch-i2cget "1" chip-addr reg-addr))
   ([bus chip-addr reg-addr] (fetch-i2cget bus chip-addr reg-addr nil nil))
@@ -34,7 +34,7 @@
         :error/reason  :i2c-read-failed
         :error/message (:err result)}))))
 
-(defn fetch-i2cdump
+(defn- fetch-i2cdump
   "Executes i2cdump command for specified address and bus (defaults to bus '1')."
   ([addr] (fetch-i2cdump "1" addr))
   ([bus addr]
@@ -85,7 +85,7 @@
 ;; 2. BME280 READERS
 ;; =============================================================================
 
-(defn read-bme280-chip-id
+(defn- read-bme280-chip-id
   "Reads and validates the BME280 chip ID via i2cget."
   ([] (read-bme280-chip-id "1"))
   ([bus]
@@ -94,7 +94,7 @@
        (assoc (bme280/decode-chip-id (:out res)) :status :ok)
        res))))
 
-(defn read-bme280-mode
+(defn- read-bme280-mode
   "Reads current BME280 sensor mode from ctrl_meas register."
   ([] (read-bme280-mode "1"))
   ([bus]
@@ -103,8 +103,8 @@
        {:status :ok :bme280/mode (bme280/decode-mode (:out res))}
        res))))
 
-(defn read-bme280-calibration
-  "Reads actual hardware calibration coefficients from BME280."
+(defn- read-bme280-calibration
+  "Reads BME280 raw calibration registers via i2cdump and parses coefficients."
   ([] (read-bme280-calibration "1"))
   ([bus]
    (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
@@ -112,7 +112,7 @@
        (bme280/parse-calibration (:out dump))
        dump))))
 
-(defn read-bme280-temperature
+(defn- read-bme280-temperature
   "Reads raw ADC temperature reading from BME280 driver."
   ([] (read-bme280-temperature "1"))
   ([bus]
@@ -142,7 +142,7 @@
            parsed))
        dump))))
 
-(defn read-seesaw-soil-reading
+(defn- read-seesaw-soil-reading
   "Generic reader for Seesaw Soil metrics (moisture or temperature)."
   ([base-key offset-key bytes-len parse-fn]
    (read-seesaw-soil-reading "1" base-key offset-key bytes-len parse-fn))
