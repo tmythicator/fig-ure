@@ -10,10 +10,10 @@
     s))
 
 (defn round-2
-  "Rounds a floating point number to 2 decimal places."
+  "Rounds a number to 2 decimal places."
   [n]
   (if (number? n)
-    (Double/parseDouble (format "%.2f" n))
+    (Double/parseDouble (format "%.2f" (double n)))
     n))
 
 (defn parse-hex

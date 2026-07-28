@@ -54,6 +54,9 @@
     (round-2 val)
     val))
 
+(defmethod format-sensor-value :soil-moisture [_ val]
+  val)
+
 (defn format-reading
   "Formats a raw sensor reading into the internal telemetry map structure."
   [sensor-id raw-val unit]

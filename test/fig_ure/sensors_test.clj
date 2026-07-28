@@ -98,11 +98,11 @@
                    :error/reason :i2c-write-failed}
                   (sensors/set-sensor-mode! :bme280 :normal))))))
 
-(deftest read-bme280-readings-test
-  (testing "reads all telemetry metrics (temp, pressure, humidity) atomically via i2cdump mock"
+(deftest read-sensor-readings-bme280-test
+  (testing "reads all telemetry metrics via public read-sensor-readings API"
     (let [fixture (:dump (edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))]
       (with-redefs [sh (fn [& _] {:exit 0 :out fixture :err ""})]
-        (let [res (sensors/read-bme280-readings)]
+        (let [res (sensors/read-sensor-readings :bme280)]
           (is (= :ok (:status res)))
           (is (= 3 (count (:readings res))))
           (is (= [:bme280-temperature :bme280-pressure :bme280-humidity]
@@ -113,4 +113,41 @@
       (is (match? {:status        :error
                    :error/reason  :i2c-read-failed
                    :error/message "Dump failed"}
-                  (sensors/read-bme280-readings))))))
+                  (sensors/read-sensor-readings :bme280))))))
+
+(deftest read-sensor-readings-seesaw-test
+  (testing "reads soil moisture successfully via public API"
+    (with-redefs [sh (fn [cmd & _args]
+                       (if (= cmd "i2cget")
+                         {:exit 0 :out "0x01 0x41" :err ""}
+                         {:exit 0 :out "" :err ""}))]
+      (let [res (sensors/read-sensor-readings :seesaw-soil-moisture)]
+        (is (= :ok (:status res)))
+        (is (match? [{:sensor/id    :soil-moisture
+                      :sensor/value 321
+                      :sensor/unit  :capacitive}]
+                    (:readings res))))))
+
+  (testing "reads soil temperature successfully via public API"
+    (with-redefs [sh (fn [cmd & _args]
+                       (if (= cmd "i2cget")
+                         {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}
+                         {:exit 0 :out "" :err ""}))]
+      (let [res (sensors/read-sensor-readings :seesaw-soil-temperature)]
+        (is (= :ok (:status res)))
+        (is (match? [{:sensor/id    :soil-temperature
+                      :sensor/value 25.0
+                      :sensor/unit  :celsius}]
+                    (:readings res))))))
+
+  (testing "handles hardware I2C error gracefully"
+    (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "I2C error"})]
+      (is (match? {:status        :error
+                   :error/reason  :i2c-write-failed
+                   :error/message "I2C error"}
+                  (sensors/read-sensor-readings :seesaw-soil-moisture))))))
+
+(deftest set-sensor-mode-default-test
+  (testing "handles fallback :default mode for sensors without mode settings"
+    (is (match? {:status :ok}
+                (sensors/set-sensor-mode! :seesaw-soil-moisture :sleep)))))
