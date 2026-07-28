@@ -35,14 +35,29 @@
           (recur))))))
 
 (defn- start-telemetry-pipeline!
-  [sys-config]
+  [sys-config sensors-component]
   (let [stop-chan (async/chan)
         camera-chan (create-camera-chan (:camera-buf-size sys-config))
-        sensor-chan (create-sensor-chan (:sensor-buf-size sys-config))]
+        sensor-chan (create-sensor-chan (:sensor-buf-size sys-config))
+        bus (or (:i2c-bus sensors-component) "1")
+        calib (:calibration sensors-component)
+        bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
+        soil-m-produce #(sensors/read-sensor-readings :seesaw-soil-moisture bus)
+        soil-t-produce #(sensors/read-sensor-readings :seesaw-soil-temperature bus)]
 
-    (start-generic-producer! "Sensor" sensor-chan stop-chan
+    (start-generic-producer! "BME280" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
-                             sensors/read-bme280-readings
+                             bme280-produce
+                             :readings)
+
+    (start-generic-producer! "Soil moisture" sensor-chan stop-chan
+                             (:sensor-interval-ms sys-config)
+                             soil-m-produce
+                             :readings)
+
+    (start-generic-producer! "Soil Temperature" sensor-chan stop-chan
+                             (:sensor-interval-ms sys-config)
+                             soil-t-produce
                              :readings)
 
     (start-generic-producer! "Camera" camera-chan stop-chan
@@ -57,12 +72,13 @@
      :sensor-chan sensor-chan}))
 
 (defmethod ig/init-key :fig-ure/telemetry [_ config]
-  (println "Initializing telemtry pipeline...")
-  (start-telemetry-pipeline! config))
+  (println "Initializing telemtry pipeline..." config)
+  (start-telemetry-pipeline! config (:sensors config)))
 
 (defmethod ig/halt-key! :fig-ure/telemetry [_ state]
   (println "Halting telemetry worker..." state)
-  (async/close! (:stop-chan state)))
+  (when-let [stop-chan (:stop-chan state)]
+    (async/close! stop-chan)))
 
 (comment
   ;; Interactive REPL scratchpad
