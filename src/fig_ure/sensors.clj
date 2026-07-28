@@ -159,6 +159,26 @@
            get-res))
        set-res))))
 
+(defn- read-seesaw-soil-moisture
+  "Reads soil moisture reading from Adafruit Seesaw sensor."
+  ([] (read-seesaw-soil-moisture "1"))
+  ([bus]
+   (let [res (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture)]
+     (if (= :ok (:status res))
+       {:status   :ok
+        :readings [(format-reading :soil-moisture (:moisture res) :capacitive)]}
+       res))))
+
+(defn- read-seesaw-soil-temperature
+  "Reads soil temperature reading from Adafruit Seesaw sensor."
+  ([] (read-seesaw-soil-temperature "1"))
+  ([bus]
+   (let [res (read-seesaw-soil-reading bus :status :temperature 4 seesaw/parse-soil-temperature)]
+     (if (= :ok (:status res))
+       {:status   :ok
+        :readings [(format-reading :soil-temperature (:temperature res) :celsius)]}
+       res))))
+
 ;; =============================================================================
 ;; 3. MULTIMETHOD DISPATCH
 ;; =============================================================================
@@ -166,6 +186,11 @@
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
   (fn [sensor-id _mode & _args] sensor-id))
+
+(defmethod set-sensor-mode! :default
+  [sensor-id _mode & _args]
+  {:status  :ok
+   :message (str "Sensor " sensor-id " does not require mode configuration.")})
 
 (defmethod set-sensor-mode! :bme280
   ([_ mode] (set-sensor-mode! :bme280 mode "1"))
@@ -198,20 +223,12 @@
 (defmethod read-sensor-readings :seesaw-soil-moisture
   ([_] (read-sensor-readings :seesaw-soil-moisture "1"))
   ([_ bus]
-   (let [res (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture)]
-     (if (= :ok (:status res))
-       {:status  :ok
-        :reading (format-reading :soil-moisture (:moisture res) :capacitive)}
-       res))))
+   (read-seesaw-soil-moisture bus)))
 
 (defmethod read-sensor-readings :seesaw-soil-temperature
   ([_] (read-sensor-readings :seesaw-soil-temperature "1"))
   ([_ bus]
-   (let [res (read-seesaw-soil-reading bus :status :temperature 4 seesaw/parse-soil-temperature)]
-     (if (= :ok (:status res))
-       {:status  :ok
-        :reading (format-reading :soil-temperature (:temperature res) :celsius)}
-       res))))
+   (read-seesaw-soil-temperature bus)))
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
 ;; -----------------------------------------------------------------------------
