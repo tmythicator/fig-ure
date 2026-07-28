@@ -126,13 +126,15 @@
            parsed))
        dump))))
 
-(defn read-bme280-readings
-  "Reads all BME280 metrics (temperature, pressure, humidity) atomically in a single I2C dump."
-  ([] (read-bme280-readings "1"))
-  ([bus]
+(defn- read-bme280-readings
+  "Reads all BME280 metrics (temperature, pressure, humidity) atomically in a single I2C dump.
+   Optionally accepts pre-cached calibration map to avoid extra I2C calibration dumps."
+  ([] (read-bme280-readings "1" nil))
+  ([bus] (read-bme280-readings bus nil))
+  ([bus cached-calib]
    (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
      (if (= :ok (:status dump))
-       (let [calib  (:calibration (read-bme280-calibration bus))
+       (let [calib  (or cached-calib (:calibration (read-bme280-calibration bus)))
              parsed (bme280/parse-bme280-readings (:out dump) calib)]
          (if (= :ok (:status parsed))
            {:status   :ok
@@ -156,6 +158,10 @@
            (parse-fn (string/split (:out get-res) #"\s+"))
            get-res))
        set-res))))
+
+;; =============================================================================
+;; 3. MULTIMETHOD DISPATCH
+;; =============================================================================
 
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
@@ -184,9 +190,10 @@
   (fn [sensor-id & _args] sensor-id))
 
 (defmethod read-sensor-readings :bme280
-  ([_] (read-sensor-readings :bme280 "1"))
-  ([_ bus]
-   (read-bme280-readings bus)))
+  ([_] (read-sensor-readings :bme280 "1" nil))
+  ([_ bus] (read-sensor-readings :bme280 bus nil))
+  ([_ bus cached-calib]
+   (read-bme280-readings bus cached-calib)))
 
 (defmethod read-sensor-readings :seesaw-soil-moisture
   ([_] (read-sensor-readings :seesaw-soil-moisture "1"))
@@ -210,13 +217,20 @@
 ;; -----------------------------------------------------------------------------
 
 (defmethod ig/init-key :fig-ure/sensors [_ config]
-  (println "[Sensors] Initializing BME280 sensor reader..." config)
-  (let [bus       (or (:i2c-bus config) "1")
-        handshake (read-bme280-chip-id bus)]
-    (println "[Sensors] BME280 Handshake Status:" handshake)
-    {:status   :ready
-     :i2c-bus  bus
-     :bme280   handshake}))
+  (println "[Sensors] Initializing hardware I2C sensors..." config)
+  (let [bus            (or (:i2c-bus config) "1")
+        bme-handshake  (read-bme280-chip-id bus)
+        seesaw-id-res  (read-seesaw-soil-reading bus :status :hardware-id 1 identity)
+        seesaw-decoded (seesaw/decode-hardware-id (first seesaw-id-res))
+        _              (set-sensor-mode! :bme280 :normal bus)
+        calib-res      (read-bme280-calibration bus)]
+    (println "[Sensors] BME280 Handshake:" bme-handshake)
+    (println "[Sensors] Seesaw Handshake:" seesaw-decoded)
+    {:status       :ready
+     :i2c-bus      bus
+     :bme280-id    bme-handshake
+     :calibration  (:calibration calib-res)
+     :seesaw-id    seesaw-decoded}))
 
 (defmethod ig/halt-key! :fig-ure/sensors [_ state]
   (println "[Sensors] Halting sensor reader..." state))
