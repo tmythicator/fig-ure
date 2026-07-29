@@ -41,4 +41,13 @@
                        :error/message "Device timeout detected"}
                       (stream/take-snapshot! temp-dir))))
         (finally
+          (fs/delete-tree temp-dir)))))
+
+  (testing "handles missing camera binary exception gracefully"
+    (let [temp-dir (str (fs/create-temp-dir {:prefix "fig-test-missing-"}))]
+      (try
+        (with-redefs [sh/sh (fn [& _] (throw (java.io.IOException. "Cannot run program \"rpicam-still\": Exec failed")))]
+          (is (thrown? java.io.IOException
+                       (stream/take-snapshot! temp-dir))))
+        (finally
           (fs/delete-tree temp-dir))))))
