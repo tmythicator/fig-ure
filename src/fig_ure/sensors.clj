@@ -15,9 +15,9 @@
    (let [res (sh "i2cset" "-y" bus chip-addr reg-addr value)]
      (if (zero? (:exit res))
        {:status :ok}
-       {:status :error
-        :error/reason :i2c-write-failed
-        :error/message (:err res)}))))
+       {:status        :error
+        :error/reason  :i2c-write-failed
+        :error/message (string/trim (:err res))}))))
 
 (defn- fetch-i2cget
   "Executes i2cget command to read register value(s) from a chip."
@@ -32,7 +32,7 @@
         :out    (string/trim (:out result))}
        {:status        :error
         :error/reason  :i2c-read-failed
-        :error/message (:err result)}))))
+        :error/message (string/trim (:err result))}))))
 
 (defn- fetch-i2cdump
   "Executes i2cdump command for specified address and bus (defaults to bus '1')."
@@ -43,7 +43,7 @@
        {:status :ok :out (:out result)}
        {:status        :error
         :error/reason  :i2c-read-failed
-        :error/message (:err result)}))))
+        :error/message (string/trim (:err result))}))))
 
 (defmulti format-sensor-value
   "Dispatches formatting based on sensor-id."
