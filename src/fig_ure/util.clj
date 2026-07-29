@@ -16,8 +16,7 @@
   "Rounds a number to 2 decimal places."
   [n]
   (if (number? n)
-    (let [^double d (double n)]
-      (Double/parseDouble (format "%.2f" d)))
+    (Double/parseDouble (format "%.2f" (double n)))
     n))
 
 (defn parse-hex
