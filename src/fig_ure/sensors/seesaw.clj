@@ -3,6 +3,9 @@
   (:require [clojure.string :as string]
             [fig-ure.util :as util]))
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
 (def i2c-addr "0x36")
 
 (def base-registers
@@ -33,7 +36,8 @@
   [msb-str lsb-str]
   (let [parsed (mapv util/parse-hex [msb-str lsb-str])]
     (when (every? some? parsed)
-      (let [[msb lsb] parsed]
+      (let [^long msb (first parsed)
+            ^long lsb (second parsed)]
         (bit-or (bit-shift-left msb 8) lsb)))))
 
 (defn parse-soil-moisture
@@ -52,13 +56,16 @@
   [b1 b2 b3 b4]
   (let [parsed (mapv util/parse-hex [b1 b2 b3 b4])]
     (when (every? some? parsed)
-      (let [[b1-hex b2-hex b3-hex b4-hex] parsed
+      (let [^long b1-hex (nth parsed 0)
+            ^long b2-hex (nth parsed 1)
+            ^long b3-hex (nth parsed 2)
+            ^long b4-hex (nth parsed 3)
             raw-int (bit-or
                      (bit-shift-left b1-hex 24)
                      (bit-shift-left b2-hex 16)
                      (bit-shift-left b3-hex 8)
                      b4-hex)
-            two-pow-16 65536.0]
+           two-pow-16 65536.0]
         (/ raw-int two-pow-16)))))
 
 (defn parse-soil-temperature

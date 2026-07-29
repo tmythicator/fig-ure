@@ -3,6 +3,9 @@
   (:require [clojure.string :as string]
             [fig-ure.util :as util]))
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
 ;; =============================================================================
 ;; 1. CONSTANTS & CONFIG
 ;; =============================================================================
@@ -72,35 +75,35 @@
     (string/split row-str #"\s+")))
 
 (defn- parse-temp-calib [b80]
-  (let [t1-lsb (util/parse-hex (nth b80 8))
-        t1-msb (util/parse-hex (nth b80 9))
-        t2-lsb (util/parse-hex (nth b80 10))
-        t2-msb (util/parse-hex (nth b80 11))
-        t3-lsb (util/parse-hex (nth b80 12))
-        t3-msb (util/parse-hex (nth b80 13))]
+  (let [^long t1-lsb (util/parse-hex (nth b80 8))
+        ^long t1-msb (util/parse-hex (nth b80 9))
+        ^long t2-lsb (util/parse-hex (nth b80 10))
+        ^long t2-msb (util/parse-hex (nth b80 11))
+        ^long t3-lsb (util/parse-hex (nth b80 12))
+        ^long t3-msb (util/parse-hex (nth b80 13))]
     {:dig-t1 (+ t1-lsb (bit-shift-left t1-msb 8))
      :dig-t2 (unchecked-short (+ t2-lsb (bit-shift-left t2-msb 8)))
      :dig-t3 (unchecked-short (+ t3-lsb (bit-shift-left t3-msb 8)))}))
 
 (defn- parse-press-calib [b80 b90]
-  (let [p1-lsb (util/parse-hex (nth b80 14))
-        p1-msb (util/parse-hex (nth b80 15))
-        p2-lsb (util/parse-hex (nth b90 0))
-        p2-msb (util/parse-hex (nth b90 1))
-        p3-lsb (util/parse-hex (nth b90 2))
-        p3-msb (util/parse-hex (nth b90 3))
-        p4-lsb (util/parse-hex (nth b90 4))
-        p4-msb (util/parse-hex (nth b90 5))
-        p5-lsb (util/parse-hex (nth b90 6))
-        p5-msb (util/parse-hex (nth b90 7))
-        p6-lsb (util/parse-hex (nth b90 8))
-        p6-msb (util/parse-hex (nth b90 9))
-        p7-lsb (util/parse-hex (nth b90 10))
-        p7-msb (util/parse-hex (nth b90 11))
-        p8-lsb (util/parse-hex (nth b90 12))
-        p8-msb (util/parse-hex (nth b90 13))
-        p9-lsb (util/parse-hex (nth b90 14))
-        p9-msb (util/parse-hex (nth b90 15))]
+  (let [^long p1-lsb (util/parse-hex (nth b80 14))
+        ^long p1-msb (util/parse-hex (nth b80 15))
+        ^long p2-lsb (util/parse-hex (nth b90 0))
+        ^long p2-msb (util/parse-hex (nth b90 1))
+        ^long p3-lsb (util/parse-hex (nth b90 2))
+        ^long p3-msb (util/parse-hex (nth b90 3))
+        ^long p4-lsb (util/parse-hex (nth b90 4))
+        ^long p4-msb (util/parse-hex (nth b90 5))
+        ^long p5-lsb (util/parse-hex (nth b90 6))
+        ^long p5-msb (util/parse-hex (nth b90 7))
+        ^long p6-lsb (util/parse-hex (nth b90 8))
+        ^long p6-msb (util/parse-hex (nth b90 9))
+        ^long p7-lsb (util/parse-hex (nth b90 10))
+        ^long p7-msb (util/parse-hex (nth b90 11))
+        ^long p8-lsb (util/parse-hex (nth b90 12))
+        ^long p8-msb (util/parse-hex (nth b90 13))
+        ^long p9-lsb (util/parse-hex (nth b90 14))
+        ^long p9-msb (util/parse-hex (nth b90 15))]
     {:dig-p1 (+ p1-lsb (bit-shift-left p1-msb 8))
      :dig-p2 (unchecked-short (+ p2-lsb (bit-shift-left p2-msb 8)))
      :dig-p3 (unchecked-short (+ p3-lsb (bit-shift-left p3-msb 8)))
@@ -112,18 +115,18 @@
      :dig-p9 (unchecked-short (+ p9-lsb (bit-shift-left p9-msb 8)))}))
 
 (defn- parse-hum-calib [ba0 be0]
-  (let [h1     (util/parse-hex (nth ba0 1))
-        h2-lsb (util/parse-hex (nth be0 1))
-        h2-msb (util/parse-hex (nth be0 2))
+  (let [^long h1     (util/parse-hex (nth ba0 1))
+        ^long h2-lsb (util/parse-hex (nth be0 1))
+        ^long h2-msb (util/parse-hex (nth be0 2))
         h2     (unchecked-short (+ h2-lsb (bit-shift-left h2-msb 8)))
-        h3     (util/parse-hex (nth be0 3))
-        h4-msb (util/parse-hex (nth be0 4))
-        h4-lsb (util/parse-hex (nth be0 5))
+        ^long h3     (util/parse-hex (nth be0 3))
+        ^long h4-msb (util/parse-hex (nth be0 4))
+        ^long h4-lsb (util/parse-hex (nth be0 5))
         h4     (unchecked-short (bit-or (bit-shift-left h4-msb 4) (bit-and h4-lsb 0x0F)))
-        h5-msb (util/parse-hex (nth be0 6))
-        h5-lsb (util/parse-hex (nth be0 5))
+        ^long h5-msb (util/parse-hex (nth be0 6))
+        ^long h5-lsb (util/parse-hex (nth be0 5))
         h5     (unchecked-short (bit-or (bit-shift-left h5-msb 4) (bit-shift-right (bit-and h5-lsb 0xF0) 4)))
-        h6-val (util/parse-hex (nth be0 7))
+        ^long h6-val (util/parse-hex (nth be0 7))
         h6     (byte (unchecked-byte h6-val))]
     {:dig-h1 h1
      :dig-h2 h2
@@ -160,8 +163,12 @@
 (defn calculate-t-fine
   "Calculates internal raw t-fine temperature variable from raw ADC temperature and calibration coefficients.
    Ported directly from official Bosch Sensortec BME280 C driver (Section 4.2.3 of datasheet)."
-  [adc-t {:keys [dig-t1 dig-t2 dig-t3]}]
-  (let [v1     (* (- (/ adc-t 16384.0) (/ dig-t1 1024.0)) dig-t2)
+  ^double [adc-t {:keys [dig-t1 dig-t2 dig-t3]}]
+  (let [adc-t (double adc-t)
+        dig-t1 (double dig-t1)
+        dig-t2 (double dig-t2)
+        dig-t3 (double dig-t3)
+        v1     (* (- (/ adc-t 16384.0) (/ dig-t1 1024.0)) dig-t2)
         v2-tmp (- (/ adc-t 131072.0) (/ dig-t1 8192.0))
         v2     (* v2-tmp v2-tmp dig-t3)]
     (+ v1 v2)))
@@ -177,7 +184,18 @@
    Ported directly from official Bosch Sensortec BME280 C driver (Section 4.2.3 32-bit integer arithmetic)."
   ([adc-p calib-p] (compensate-pressure adc-p calib-p (:t-fine-default config)))
   ([adc-p {:keys [dig-p1 dig-p2 dig-p3 dig-p4 dig-p5 dig-p6 dig-p7 dig-p8 dig-p9]} t-fine]
-   (let [v1 (- (/ t-fine 2.0) 64000.0)
+   (let [adc-p (double adc-p)
+         t-fine (double t-fine)
+         dig-p1 (double dig-p1)
+         dig-p2 (double dig-p2)
+         dig-p3 (double dig-p3)
+         dig-p4 (double dig-p4)
+         dig-p5 (double dig-p5)
+         dig-p6 (double dig-p6)
+         dig-p7 (double dig-p7)
+         dig-p8 (double dig-p8)
+         dig-p9 (double dig-p9)
+         v1 (- (/ t-fine 2.0) 64000.0)
          v2 (/ (* v1 v1 dig-p6) 32768.0)
          v2 (+ v2 (* v1 dig-p5 2.0))
          v2 (+ (/ v2 4.0) (* dig-p4 65536.0))
@@ -197,12 +215,20 @@
    Ported 1-to-1 from official Bosch Sensortec BME280 C driver (Section 4.2.3 64-bit double precision)."
   ([adc-h calib-h] (compensate-humidity adc-h calib-h (:t-fine-default config)))
   ([adc-h {:keys [dig-h1 dig-h2 dig-h3 dig-h4 dig-h5 dig-h6]} t-fine]
-   (let [var-h (- t-fine 76800.0)
+   (let [adc-h (double adc-h)
+         t-fine (double t-fine)
+         dig-h1 (double dig-h1)
+         dig-h2 (double dig-h2)
+         dig-h3 (double dig-h3)
+         dig-h4 (double dig-h4)
+         dig-h5 (double dig-h5)
+         dig-h6 (double dig-h6)
+         var-h (- t-fine 76800.0)
          var-h (* (- adc-h (+ (* dig-h4 64.0) (* dig-h5 (/ var-h 16384.0))))
                   (/ dig-h2 65536.0)
                   (+ 1.0 (* (/ dig-h6 67108864.0)
                             var-h
-                            (+ 1.0 (* (/ (or dig-h3 0) 67108864.0) var-h)))))
+                            (+ 1.0 (* (/ dig-h3 67108864.0) var-h)))))
          var-h (* var-h (- 1.0 (/ (* dig-h1 var-h) 524288.0)))]
      (max 0.0 (min 100.0 var-h)))))
 
@@ -211,14 +237,14 @@
   [dump-text]
   (when-let [bytes (parse-row-bytes dump-text "f0")]
     (when (>= (count bytes) 15)
-      (let [p-msb  (util/parse-hex (nth bytes 7))
-            p-lsb  (util/parse-hex (nth bytes 8))
-            p-xlsb (util/parse-hex (nth bytes 9))
-            t-msb  (util/parse-hex (nth bytes 10))
-            t-lsb  (util/parse-hex (nth bytes 11))
-            t-xlsb (util/parse-hex (nth bytes 12))
-            h-msb  (util/parse-hex (nth bytes 13))
-            h-lsb  (util/parse-hex (nth bytes 14))]
+      (let [^long p-msb  (util/parse-hex (nth bytes 7))
+            ^long p-lsb  (util/parse-hex (nth bytes 8))
+            ^long p-xlsb (util/parse-hex (nth bytes 9))
+            ^long t-msb  (util/parse-hex (nth bytes 10))
+            ^long t-lsb  (util/parse-hex (nth bytes 11))
+            ^long t-xlsb (util/parse-hex (nth bytes 12))
+            ^long h-msb  (util/parse-hex (nth bytes 13))
+            ^long h-lsb  (util/parse-hex (nth bytes 14))]
         {:raw-press (bit-or (bit-shift-left p-msb 12)
                             (bit-shift-left p-lsb 4)
                             (bit-shift-right p-xlsb 4))
