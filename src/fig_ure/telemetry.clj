@@ -1,11 +1,11 @@
 (ns fig-ure.telemetry
   "Background worker for batching and pushing telemetry metrics to InfluxDB Cloud or local storage."
   (:require
-   [clojure.core :as c]
    [clojure.core.async :as async]
-   [integrant.core :as ig]
    [fig-ure.sensors :as sensors]
-   [fig-ure.stream :as stream]))
+   [fig-ure.stream :as stream]
+   [fig-ure.util :as util]
+   [integrant.core :as ig]))
 
 (def config
   {:camera-interval-ms 600000 ;; 10 min
@@ -28,44 +28,82 @@
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
       (if (= port stop-chan)
-        (println "[" name " Producer] Received stop-signal. Exiting loop.")
-        (let [res (produce-fn)]
-          (when (= (:status res) :ok)
-            (async/>! out-chan (trans-fn res)))
+        (async/>! out-chan {:event/type    :producer-stopped
+                            :producer/name name})
+        (let [res (try
+                    (produce-fn)
+                    (catch Exception e
+                      {:status        :error
+                       :error/reason  :execution-failed
+                       :error/message (.getMessage e)}))]
+          (if (= (:status res) :ok)
+            (async/>! out-chan {:event/type    :producer-data
+                                :producer/name name
+                                :data          (trans-fn res)})
+            (async/>! out-chan {:event/type    :producer-error
+                                :producer/name name
+                                :error         res}))
           (recur))))))
+
+(defn- start-generic-consumer!
+  [name stop-chan handler-fn & chans]
+  (let [listen-ports (conj (vec chans) stop-chan)]
+    (async/go-loop []
+      (let [[val port] (async/alts! listen-ports)]
+        (if (= port stop-chan)
+          (println (util/format-log-message name "Received stop signal. Exiting."))
+          (do
+            (try
+              (handler-fn val)
+              (catch Exception e
+                (println (util/format-log-message name (str "Handler error: " (.getMessage e))))))
+            (recur)))))))
+
+(defn- handle-telemetry-event
+  [val]
+  (case (:event/type val)
+    :producer-data    (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Data: " (:data val))))
+    :producer-error   (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Error: " (get-in val [:error :error/message] "Read failed"))))
+    :producer-stopped (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Stopped.")))
+    (println (util/format-log-message "Telemetry Consumer" (str "Raw event: " val)))))
+
+(defn- start-telemetry-consumer!
+  [stop-chan & chans]
+  (apply start-generic-consumer! "Telemetry Consumer" stop-chan handle-telemetry-event chans))
 
 (defn- start-telemetry-pipeline!
   [sys-config sensors-component]
   (let [stop-chan (async/chan)
-        camera-chan (create-camera-chan (:camera-buf-size sys-config))
         sensor-chan (create-sensor-chan (:sensor-buf-size sys-config))
+        camera-chan (create-camera-chan (:camera-buf-size sys-config))
         bus (or (:i2c-bus sensors-component) "1")
         calib (:calibration sensors-component)
         bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
         soil-m-produce #(sensors/read-sensor-readings :seesaw-soil-moisture bus)
         soil-t-produce #(sensors/read-sensor-readings :seesaw-soil-temperature bus)]
 
-    (start-generic-producer! "BME280" sensor-chan stop-chan
+    (start-generic-producer! "BME280:all" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
                              bme280-produce
                              :readings)
 
-    (start-generic-producer! "Soil moisture" sensor-chan stop-chan
+    (start-generic-producer! "Seesaw:Moisture" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
                              soil-m-produce
                              :readings)
 
-    (start-generic-producer! "Soil Temperature" sensor-chan stop-chan
+    (start-generic-producer! "Seesaw:Temperature" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
                              soil-t-produce
                              :readings)
 
-    (start-generic-producer! "Camera" camera-chan stop-chan
+    (start-generic-producer! "Arducam:Snapshot" camera-chan stop-chan
                              (:camera-interval-ms sys-config)
                              stream/take-snapshot!
-                             (fn [res]      {:event/type :camera-snapshot
-                                             :file-path (:file-path res)
-                                             :timestamp (:timestamp res)}))
+                             (fn [res] [(sensors/format-reading :camera-snapshot (:file-path res) :file)]))
+
+    (start-telemetry-consumer! stop-chan sensor-chan camera-chan)
+
     {:status :ready
      :stop-chan stop-chan
      :camera-chan camera-chan
@@ -81,5 +119,11 @@
     (async/close! stop-chan)))
 
 (comment
-  ;; Interactive REPL scratchpad
-  )
+  (def test-config
+    {:sensor-buf-size    10
+     :camera-buf-size    10
+     :sensor-interval-ms 2000
+     :camera-interval-ms 5000})
+
+  (def system (ig/init-key :fig-ure/telemetry test-config))
+  (ig/halt-key! :fig-ure/telemetry system))

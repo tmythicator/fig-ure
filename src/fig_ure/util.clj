@@ -23,5 +23,13 @@
   "Safely parses a hex string (with or without '0x' prefix) into an integer."
   ^Long [^String s]
   (try
-    (Integer/parseInt (strip-0x s) 16)
+    (Long/parseLong (strip-0x s) 16)
     (catch Exception _ nil)))
+
+(defn format-log-message
+  "Formats a standardized aligned log message string for telemetry events."
+  [tag message]
+  (let [clean-msg (-> (str message)
+                      (string/replace #"\r?\n" " ")
+                      (string/trim))]
+    (format "[%-24s] %s" tag clean-msg)))
