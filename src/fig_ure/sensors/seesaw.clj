@@ -65,7 +65,7 @@
                      (bit-shift-left b2-hex 16)
                      (bit-shift-left b3-hex 8)
                      b4-hex)
-           two-pow-16 65536.0]
+            two-pow-16 65536.0]
         (/ raw-int two-pow-16)))))
 
 (defn parse-soil-temperature
