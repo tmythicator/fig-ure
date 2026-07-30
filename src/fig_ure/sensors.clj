@@ -182,6 +182,18 @@
         :readings [(format-reading :soil-temperature (:temperature res) :celsius)]}
        res))))
 
+(defn- read-seesaw-readings
+  "Reads both soil moisture and soil temperature sequentially from Adafruit Seesaw sensor."
+  ([] (read-seesaw-readings "1"))
+  ([bus]
+   (let [m-res (read-seesaw-soil-moisture bus)
+         t-res (read-seesaw-soil-temperature bus)]
+     (if (and (= :ok (:status m-res)) (= :ok (:status t-res)))
+       {:status   :ok
+        :readings (into (:readings m-res) (:readings t-res))}
+       (or (when-not (= :ok (:status m-res)) m-res)
+           t-res)))))
+
 ;; =============================================================================
 ;; 3. MULTIMETHOD DISPATCH
 ;; =============================================================================
@@ -222,6 +234,11 @@
   ([_ bus] (read-sensor-readings :bme280 bus nil))
   ([_ bus cached-calib]
    (read-bme280-readings bus cached-calib)))
+
+(defmethod read-sensor-readings :seesaw
+  ([_] (read-sensor-readings :seesaw "1"))
+  ([_ bus]
+   (read-seesaw-readings bus)))
 
 (defmethod read-sensor-readings :seesaw-soil-moisture
   ([_] (read-sensor-readings :seesaw-soil-moisture "1"))

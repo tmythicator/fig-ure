@@ -79,25 +79,19 @@
         bus (or (:i2c-bus sensors-component) "1")
         calib (:calibration sensors-component)
         bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
-        soil-m-produce #(sensors/read-sensor-readings :seesaw-soil-moisture bus)
-        soil-t-produce #(sensors/read-sensor-readings :seesaw-soil-temperature bus)]
+        seesaw-produce #(sensors/read-sensor-readings :seesaw bus)]
 
-    (start-generic-producer! "BME280:all" sensor-chan stop-chan
+    (start-generic-producer! "BME280" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
                              bme280-produce
                              :readings)
 
-    (start-generic-producer! "Seesaw:Moisture" sensor-chan stop-chan
+    (start-generic-producer! "Seesaw" sensor-chan stop-chan
                              (:sensor-interval-ms sys-config)
-                             soil-m-produce
+                             seesaw-produce
                              :readings)
 
-    (start-generic-producer! "Seesaw:Temperature" sensor-chan stop-chan
-                             (:sensor-interval-ms sys-config)
-                             soil-t-produce
-                             :readings)
-
-    (start-generic-producer! "Arducam:Snapshot" camera-chan stop-chan
+    (start-generic-producer! "Camera" camera-chan stop-chan
                              (:camera-interval-ms sys-config)
                              stream/take-snapshot!
                              (fn [res] [(sensors/format-reading :camera-snapshot (:file-path res) :file)]))

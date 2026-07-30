@@ -140,6 +140,21 @@
                       :sensor/unit  :celsius}]
                     (:readings res))))))
 
+  (testing "reads combined soil moisture and temperature successfully via public API :seesaw"
+    (with-redefs [sh (fn [cmd & args]
+                       (cond
+                         (= cmd "i2cset") {:exit 0 :out "" :err ""}
+                         (= cmd "i2cget") (let [len (last args)]
+                                            (if (= len "2")
+                                              {:exit 0 :out "0x01 0x41" :err ""}
+                                              {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}))
+                         :else {:exit 0 :out "" :err ""}))]
+      (let [res (sensors/read-sensor-readings :seesaw)]
+        (is (= :ok (:status res)))
+        (is (match? [{:sensor/id :soil-moisture :sensor/value 321 :sensor/unit :capacitive}
+                     {:sensor/id :soil-temperature :sensor/value 25.0 :sensor/unit :celsius}]
+                    (:readings res))))))
+
   (testing "handles hardware I2C error gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "I2C error"})]
       (is (match? {:status        :error
