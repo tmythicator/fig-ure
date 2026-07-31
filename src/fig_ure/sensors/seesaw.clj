@@ -21,8 +21,9 @@
 
 (def config
   "Adafruit Seesaw default configuration and expected hardware ID."
-  {:hardware-id-val "0x36"
-   :default-bus     "1"})
+  {:hardware-id-val   "0x36"
+   :default-bus       "1"
+   :i2c-read-delay-ms 10})
 
 (defn decode-hardware-id
   "Decodes raw hardware ID from Seesaw chip and checks if valid (0x36)."
@@ -39,6 +40,19 @@
       (let [^long msb (first parsed)
             ^long lsb (second parsed)]
         (bit-or (bit-shift-left msb 8) lsb)))))
+
+(defn valid-moisture?
+  "Checks if capacitive moisture reading is within valid sensor range."
+  [val]
+  (and (number? val) (<= 250 val 2000)))
+
+(defn median
+  "Calculates median value of a numerical sequence."
+  [coll]
+  (let [sorted (sort coll)
+        cnt    (count sorted)]
+    (when (pos? cnt)
+      (nth sorted (quot cnt 2)))))
 
 (defn parse-soil-moisture
   "Parses 2-byte response into soil moisture reading map."

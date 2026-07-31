@@ -47,3 +47,18 @@
     (is (match? {:status       :error
                  :error/reason :invalid-bytes}
                 (seesaw/parse-soil-temperature ["00" "19" "invalid" "00"])))))
+
+(deftest valid-moisture?-test
+  (testing "validates capacitive moisture readings within physical range 250..2000"
+    (is (true? (seesaw/valid-moisture? 500)))
+    (is (true? (seesaw/valid-moisture? 1000)))
+    (is (false? (seesaw/valid-moisture? 122)) "Rejects underflow noise (< 250)")
+    (is (false? (seesaw/valid-moisture? 33771)) "Rejects byte-offset overflow noise (0x83EB)")
+    (is (false? (seesaw/valid-moisture? 65535)) "Rejects hardware bus-busy flag (0xFFFF)")
+    (is (false? (seesaw/valid-moisture? nil)))))
+
+(deftest median-test
+  (testing "computes median filtering on raw sequences"
+    (is (= 500 (seesaw/median [300 500 1000])))
+    (is (= 950 (seesaw/median [122 950 33771])))
+    (is (nil? (seesaw/median [])))))

@@ -156,21 +156,29 @@
          offset-hex (format "0x%02X" (get seesaw/function-offsets offset-key))
          set-res    (write-i2cset! bus seesaw/i2c-addr base-hex offset-hex)]
      (if (= :ok (:status set-res))
-       (let [get-res (fetch-i2cget bus seesaw/i2c-addr "0x00" "i" bytes-len)]
+       (let [_       (Thread/sleep ^long (:i2c-read-delay-ms seesaw/config))
+             get-res (fetch-i2cget bus seesaw/i2c-addr "0x00" "i" bytes-len)]
          (if (= :ok (:status get-res))
            (parse-fn (string/split (:out get-res) #"\s+"))
            get-res))
        set-res))))
 
 (defn- read-seesaw-soil-moisture
-  "Reads soil moisture reading from Adafruit Seesaw sensor."
+  "Reads soil moisture from Adafruit Seesaw sensor using median filtering over 8 samples."
   ([] (read-seesaw-soil-moisture "1"))
   ([bus]
-   (let [res (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture)]
-     (if (= :ok (:status res))
+   (let [samples (repeatedly 8 #(read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))
+         valids  (->> samples
+                      (filter #(= :ok (:status %)))
+                      (map :moisture)
+                      (filter seesaw/valid-moisture?))
+         med-val (seesaw/median valids)]
+     (if med-val
        {:status   :ok
-        :readings [(format-reading :soil-moisture (:moisture res) :capacitive)]}
-       res))))
+        :readings [(format-reading :soil-moisture med-val :capacitive)]}
+       (or (first (filter #(= :error (:status %)) samples))
+           {:status        :error
+            :error/reason  :no-valid-moisture-samples})))))
 
 (defn- read-seesaw-soil-temperature
   "Reads soil temperature reading from Adafruit Seesaw sensor."

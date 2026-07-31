@@ -116,17 +116,23 @@
                   (sensors/read-sensor-readings :bme280))))))
 
 (deftest read-sensor-readings-seesaw-test
-  (testing "reads soil moisture successfully via public API"
-    (with-redefs [sh (fn [cmd & _args]
-                       (if (= cmd "i2cget")
-                         {:exit 0 :out "0x01 0x41" :err ""}
-                         {:exit 0 :out "" :err ""}))]
-      (let [res (sensors/read-sensor-readings :seesaw-soil-moisture)]
-        (is (= :ok (:status res)))
-        (is (match? [{:sensor/id    :soil-moisture
-                      :sensor/value 321
-                      :sensor/unit  :capacitive}]
-                    (:readings res))))))
+  (testing "reads soil moisture successfully via public API with median noise filtering"
+    (let [counter (atom 0)]
+      (with-redefs [sh (fn [cmd & _args]
+                         (if (= cmd "i2cget")
+                           (let [c (swap! counter inc)]
+                             (case c
+                               1 {:exit 0 :out "0x83 0xeb" :err ""} ;; 33771 (Garbage noise)
+                               2 {:exit 0 :out "0x01 0xf4" :err ""} ;; 500   (Valid reading)
+                               3 {:exit 0 :out "0x00 0x7a" :err ""} ;; 122   (Underflow noise)
+                               {:exit 0 :out "0x01 0xf4" :err ""}))
+                           {:exit 0 :out "" :err ""}))]
+        (let [res (sensors/read-sensor-readings :seesaw-soil-moisture)]
+          (is (= :ok (:status res)))
+          (is (match? [{:sensor/id    :soil-moisture
+                        :sensor/value 500
+                        :sensor/unit  :capacitive}]
+                      (:readings res)))))))
 
   (testing "reads soil temperature successfully via public API"
     (with-redefs [sh (fn [cmd & _args]
