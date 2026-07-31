@@ -88,6 +88,8 @@
 ;; 2. BME280 READERS
 ;; =============================================================================
 
+(declare set-sensor-mode!)
+
 (defn- read-bme280-chip-id
   "Reads and validates the BME280 chip ID via i2cget."
   ([] (read-bme280-chip-id "1"))
@@ -135,6 +137,7 @@
   ([] (read-bme280-readings "1" nil))
   ([bus] (read-bme280-readings bus nil))
   ([bus cached-calib]
+   (set-sensor-mode! :bme280 :normal bus)
    (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
      (if (= :ok (:status dump))
        (let [calib  (or cached-calib (:calibration (read-bme280-calibration bus)))
@@ -304,6 +307,7 @@
   (time (read-bme280-readings))
 
   (read-sensor-readings :bme280)
+  (read-sensor-readings :seesaw)
   (read-sensor-readings :seesaw-soil-moisture)
   (read-sensor-readings :seesaw-soil-temperature)
 
