@@ -1,10 +1,11 @@
 (ns fig-ure.camera
-  "Process lifecycle manager for local camera snapshots, rpicam-still, and hardware video capture."
+  "Low-level hardware driver for Raspberry Pi Camera Module 3 commands (rpicam-still, rpicam-vid)."
   (:require
    [babashka.fs :as fs]
    [clojure.java.shell :as sh]
-   [fig-ure.domain :as domain]
-   [integrant.core :as ig]))
+   [fig-ure.domain :as domain]))
+
+(set! *warn-on-reflection* true)
 
 (def config
   {:snapshots-dir "data/snapshots"
@@ -34,7 +35,7 @@
   (domain/make-reading :camera/snapshot file-path :file))
 
 (defn take-snapshot!
-  "Creates snapshot and places in into the configured folder."
+  "Executes rpicam-still hardware command to capture a still image snapshot to disk."
   ([] (take-snapshot! (:snapshots-dir config)))
   ([dir-path]
    (let [dir-abs   (ensure-snapshots-dir! dir-path)
@@ -48,14 +49,6 @@
        {:status        :error
         :error/reason  :camera-capture-failed
         :error/message (:err res)}))))
-
-(defmethod ig/init-key :fig-ure/camera [_ config]
-  (println "Initializing camera hardware manager..." config)
-  (ensure-snapshots-dir!)
-  {:status :ready})
-
-(defmethod ig/halt-key! :fig-ure/camera [_ state]
-  (println "Halting camera hardware manager..." state))
 
 (comment
   ;; Interactive REPL scratchpad
