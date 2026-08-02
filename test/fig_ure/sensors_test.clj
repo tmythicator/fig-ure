@@ -1,19 +1,20 @@
 (ns fig-ure.sensors-test
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.java.shell :refer [sh]]
-            [clojure.test :refer [are deftest is testing]]
-            [fig-ure.sensors :as sensors]
-            [fig-ure.sensors.bme280 :as bme280]
-            [matcher-combinators.test :refer [match?]]
-            [fig-ure.schema :as schema]))
+  (:require
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.java.shell :refer [sh]]
+   [clojure.test :refer [are deftest is testing]]
+   [fig-ure.schema :as schema]
+   [fig-ure.sensors :as sensors]
+   [fig-ure.sensors.bme280 :as bme280]
+   [matcher-combinators.test :refer [match?]]))
 
 (deftest format-reading-test
   (testing "formats sensor reading into telemetry map structure"
     (is (match? {:sensor/id    :seesaw/moisture
                  :sensor/value 42.5
                  :sensor/unit  :percent}
-                (sensors/format-reading :seesaw/moisture 42.5 :percent)))))
+                (#'sensors/format-reading :seesaw/moisture 42.5 :percent)))))
 
 (deftest read-bme280-chip-id-test
   (testing "reads BME280 chip ID successfully using mocked i2cget shell call"

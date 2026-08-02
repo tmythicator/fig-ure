@@ -3,6 +3,7 @@
   (:require
    [clojure.core.async :as async]
    [fig-ure.camera :as camera]
+   [fig-ure.domain :as domain]
    [fig-ure.sensors :as sensors]
    [fig-ure.util :as util]
    [integrant.core :as ig]))
@@ -28,8 +29,7 @@
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
       (if (= port stop-chan)
-        (async/>! out-chan {:event/type    :producer-stopped
-                            :producer/name name})
+        (async/>! out-chan (domain/make-telemetry-stopped-event name))
         (let [res (try
                     (produce-fn)
                     (catch Exception e
@@ -37,12 +37,8 @@
                        :error/reason  :execution-failed
                        :error/message (.getMessage e)}))]
           (if (= (:status res) :ok)
-            (async/>! out-chan {:event/type    :producer-data
-                                :producer/name name
-                                :data          (:readings res)})
-            (async/>! out-chan {:event/type    :producer-error
-                                :producer/name name
-                                :error         res}))
+            (async/>! out-chan (domain/make-telemetry-data-event name (:readings res)))
+            (async/>! out-chan (domain/make-telemetry-error-event name res)))
           (recur))))))
 
 (defn- start-camera-producer!
@@ -50,8 +46,7 @@
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
       (if (= port stop-chan)
-        (async/>! out-chan {:event/type    :producer-stopped
-                            :producer/name "Camera"})
+        (async/>! out-chan (domain/make-telemetry-stopped-event "Camera"))
         (do
           (async/thread
             (let [res (try
@@ -61,39 +56,22 @@
                            :error/reason  :execution-failed
                            :error/message (.getMessage e)}))]
               (if (= (:status res) :ok)
-                (async/>!! out-chan {:event/type    :producer-data
-                                     :producer/name "Camera"
-                                     :data          [(camera/format-snapshot-reading (:file-path res))]})
-                (async/>!! out-chan {:event/type    :producer-error
-                                     :producer/name "Camera"
-                                     :error         res}))))
+                (async/>!! out-chan (domain/make-telemetry-data-event "Camera" [(camera/format-snapshot-reading (:file-path res))]))
+                (async/>!! out-chan (domain/make-telemetry-error-event "Camera" res)))))
           (recur))))))
 
-(defn- start-generic-consumer!
-  [name stop-chan handler-fn & chans]
-  (let [listen-ports (conj (vec chans) stop-chan)]
-    (async/go-loop []
-      (let [[val port] (async/alts! listen-ports)]
-        (if (= port stop-chan)
-          (println (util/format-log-message name "Received stop signal. Exiting."))
-          (do
-            (try
-              (handler-fn val)
-              (catch Exception e
-                (println (util/format-log-message name (str "Handler error: " (.getMessage e))))))
-            (recur)))))))
-
-(defn- handle-telemetry-event
-  [val]
-  (case (:event/type val)
-    :producer-data    (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Data: " (:data val))))
-    :producer-error   (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Error: " (get-in val [:error :error/message] "Read failed"))))
-    :producer-stopped (println (util/format-log-message "Telemetry Consumer" (str "[" (:producer/name val) "] Stopped.")))
-    (println (util/format-log-message "Telemetry Consumer" (str "Raw event: " val)))))
-
 (defn- start-telemetry-consumer!
-  [stop-chan & chans]
-  (apply start-generic-consumer! "Telemetry Consumer" stop-chan handle-telemetry-event chans))
+  [stop-chan sensor-chan]
+  (async/go-loop []
+    (let [[val port] (async/alts! [sensor-chan stop-chan])]
+      (if (= port stop-chan)
+        (util/log-message! "Telemetry Consumer" "Received stop signal. Exiting.")
+        (do
+          (try
+            (util/log-telemetry-event! "Telemetry Consumer" val)
+            (catch Exception e
+              (util/log-message! "Telemetry Consumer" (str "Handler error: " (.getMessage e)))))
+          (recur))))))
 
 (defn- start-telemetry-pipeline!
   [sys-config sensors-component]
@@ -116,7 +94,7 @@
     (start-camera-producer! camera-chan stop-chan
                             (:camera-interval-ms sys-config))
 
-    (start-telemetry-consumer! stop-chan sensor-chan camera-chan)
+    (start-telemetry-consumer! stop-chan sensor-chan)
 
     {:status :ready
      :stop-chan stop-chan
@@ -124,11 +102,11 @@
      :sensor-chan sensor-chan}))
 
 (defmethod ig/init-key :fig-ure/telemetry [_ config]
-  (println "Initializing telemtry pipeline..." config)
+  (util/log-message! "Telemetry" (str "Initializing telemetry pipeline... " config))
   (start-telemetry-pipeline! config (:sensors config)))
 
 (defmethod ig/halt-key! :fig-ure/telemetry [_ state]
-  (println "Halting telemetry worker..." state)
+  (util/log-message! "Telemetry" (str "Halting telemetry worker... " state))
   (when-let [stop-chan (:stop-chan state)]
     (async/close! stop-chan)))
 

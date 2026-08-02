@@ -33,3 +33,18 @@
                       (string/replace #"\r?\n" " ")
                       (string/trim))]
     (format "[%-24s] %s" tag clean-msg)))
+
+(defn log-message!
+  "Side-effecting helper to log a formatted message with a tag."
+  [tag message]
+  (println (format-log-message tag message)))
+
+(defn log-telemetry-event!
+  "Logs telemetry worker event with timestamps and system prefix."
+  [tag event]
+  (let [msg (case (:event/type event)
+              :producer-data    (str "[" (:producer/name event) "] Data: " (:data event))
+              :producer-error   (str "[" (:producer/name event) "] Error: " (get-in event [:error :error/message] "Read failed"))
+              :producer-stopped (str "[" (:producer/name event) "] Stopped.")
+              (str "Raw event: " event))]
+    (log-message! tag msg)))

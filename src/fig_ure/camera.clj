@@ -3,6 +3,7 @@
   (:require
    [babashka.fs :as fs]
    [clojure.java.shell :as sh]
+   [fig-ure.domain :as domain]
    [integrant.core :as ig]))
 
 (def config
@@ -30,10 +31,7 @@
 (defn format-snapshot-reading
   "Formats a camera snapshot file path into a Malli-compliant SensorReading telemetry map."
   [file-path]
-  {:sensor/id        :camera/snapshot
-   :sensor/value     file-path
-   :sensor/unit      :file
-   :sensor/timestamp (System/currentTimeMillis)})
+  (domain/make-reading :camera/snapshot file-path :file))
 
 (defn take-snapshot!
   "Creates snapshot and places in into the configured folder."

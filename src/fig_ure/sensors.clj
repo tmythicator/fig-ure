@@ -3,6 +3,7 @@
   (:require
    [clojure.java.shell :refer [sh]]
    [clojure.string :as string]
+   [fig-ure.domain :as domain]
    [fig-ure.schema :as schema]
    [fig-ure.sensors.bme280 :as bme280] ;; [snitch.core :refer [defn*]]
    [fig-ure.sensors.seesaw :as seesaw]
@@ -46,25 +47,10 @@
         :error/reason  :i2c-read-failed
         :error/message (string/trim (:err result))}))))
 
-(defmulti format-sensor-value
-  "Dispatches formatting based on sensor-id."
-  (fn [sensor-id _val] sensor-id))
-
-(defmethod format-sensor-value :default [_ val]
-  (if (number? val)
-    (round-2 val)
-    val))
-
-(defmethod format-sensor-value :seesaw/moisture [_ val]
-  val)
-
-(defn format-reading
-  "Formats a raw sensor reading into the internal telemetry map structure."
+(defn- format-reading
+  "Delegates to domain/make-reading."
   [sensor-id raw-val unit]
-  {:sensor/id        sensor-id
-   :sensor/value     (format-sensor-value sensor-id raw-val)
-   :sensor/unit      unit
-   :sensor/timestamp (System/currentTimeMillis)})
+  (domain/make-reading sensor-id raw-val unit))
 
 ;; =============================================================================
 ;; 2. BME280 READERS

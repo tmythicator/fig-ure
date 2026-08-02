@@ -1,9 +1,12 @@
 (ns fig-ure.telemetry-test
-  (:require [clojure.core.async :as async]
-            [clojure.test :refer [deftest is testing]]
-            [fig-ure.sensors :as sensors]
-            [fig-ure.camera :as camera]
-            [fig-ure.telemetry :as telemetry]))
+  (:require
+   [clojure.core.async :as async]
+   [clojure.test :refer [deftest is testing]]
+   [fig-ure.camera :as camera]
+   [fig-ure.domain :as domain]
+   [fig-ure.sensors :as sensors]
+   [fig-ure.telemetry :as telemetry]
+   [fig-ure.util :as util]))
 
 (deftest start-sensor-producer-exception-resilience-test
   (testing "producer catches RuntimeException and emits :producer-error event without crashing worker loop"
@@ -27,23 +30,23 @@
         (is (some #(= :producer-error (:event/type %)) events) "Emitted error events into output channel")
         (is (some #(= "I2C Bus Hardware Failure" (get-in % [:error :error/message])) events))))))
 
-(deftest start-generic-consumer-exception-resilience-test
+(deftest start-telemetry-consumer-exception-resilience-test
   (testing "consumer handler exception is safely caught without terminating consumer loop"
     (let [data-chan (async/chan 10)
           stop-chan (async/chan)
-          calls     (atom 0)
-          _         (#'telemetry/start-generic-consumer!
-                     "Test Consumer" stop-chan
-                     (fn [val]
-                       (swap! calls inc)
-                       (when (= val :boom)
-                         (throw (RuntimeException. "Handler crashed!"))))
-                     data-chan)]
-      (async/>!! data-chan :boom)
-      (async/>!! data-chan :ok)
-      (Thread/sleep 100)
-      (async/close! stop-chan)
-      (is (= 2 @calls) "Consumer processed next message after exception in handler"))))
+          processed (atom [])]
+      (with-redefs [util/log-telemetry-event!
+                    (fn [_tag event]
+                      (swap! processed conj (:data event))
+                      (when (= (:data event) "bad-data")
+                        (throw (RuntimeException. "Logging printer crashed!"))))]
+        (#'telemetry/start-telemetry-consumer! stop-chan data-chan)
+        (async/>!! data-chan (domain/make-telemetry-data-event "Test" "bad-data"))
+        (async/>!! data-chan (domain/make-telemetry-data-event "Test" "good-data"))
+        (Thread/sleep 100)
+        (async/close! stop-chan)
+        (is (= ["bad-data" "good-data"] @processed)
+            "Consumer processed second message despite logging exception on first message")))))
 
 (deftest telemetry-pipeline-resilience-test
   (testing "start-telemetry-pipeline handles crashing producers without blowing up async channels"
