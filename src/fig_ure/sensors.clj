@@ -66,25 +66,6 @@
    :sensor/unit      unit
    :sensor/timestamp (System/currentTimeMillis)})
 
-(defn valid-percent-reading?
-  "Check if a percent reading is valid (number and within reasonable range)."
-  [reading]
-  (let [val  (:sensor/value reading)
-        unit (:sensor/unit reading)]
-    (boolean (and (= unit :percent)
-                  (number? val)
-                  (<= 0 val 100.0)))))
-
-(defn calculate-average-percent-value
-  "Calculates average value over the readings from one sensor (percent unit)."
-  [readings]
-  (let [values (->> readings
-                    (filter valid-percent-reading?)
-                    (map :sensor/value))]
-    (if (seq values)
-      (/ (reduce + values) (count values))
-      0.0)))
-
 ;; =============================================================================
 ;; 2. BME280 READERS
 ;; =============================================================================
