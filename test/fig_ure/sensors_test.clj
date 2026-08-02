@@ -5,14 +5,15 @@
             [clojure.test :refer [are deftest is testing]]
             [fig-ure.sensors :as sensors]
             [fig-ure.sensors.bme280 :as bme280]
-            [matcher-combinators.test :refer [match?]]))
+            [matcher-combinators.test :refer [match?]]
+            [fig-ure.schema :as schema]))
 
 (deftest format-reading-test
   (testing "formats sensor reading into telemetry map structure"
-    (is (match? {:sensor/id    :soil-moisture
+    (is (match? {:sensor/id    :seesaw/moisture
                  :sensor/value 42.5
                  :sensor/unit  :percent}
-                (sensors/format-reading :soil-moisture 42.5 :percent)))))
+                (sensors/format-reading :seesaw/moisture 42.5 :percent)))))
 
 (deftest valid-percent-reading-test
   (testing "validates sensor readings (percent-unit)"
@@ -100,20 +101,24 @@
 
 (deftest read-sensor-readings-bme280-test
   (testing "reads all telemetry metrics via public read-sensor-readings API"
-    (let [fixture (:dump (edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn"))))]
-      (with-redefs [sh (fn [& _] {:exit 0 :out fixture :err ""})]
+    (let [{:keys [dump readings]} (edn/read-string (slurp (io/file "test/fixtures/bme280_fixture.edn")))]
+      (with-redefs [sh (fn [& _] {:exit 0 :out dump :err ""})]
         (let [res (sensors/read-sensor-readings :bme280)]
-          (is (= :ok (:status res)))
-          (is (= 3 (count (:readings res))))
-          (is (= [:bme280-temperature :bme280-pressure :bme280-humidity]
-                 (map :sensor/id (:readings res))))))))
+          (is (schema/valid? schema/SensorResponse res))
+          (is (match? {:status :ok
+                       :readings [{:sensor/id :bme280/temperature :sensor/value (:temp readings)  :sensor/unit :celsius}
+                                  {:sensor/id :bme280/pressure    :sensor/value (:press readings) :sensor/unit :hpa}
+                                  {:sensor/id :bme280/humidity    :sensor/value (:hum readings)   :sensor/unit :percent}]}
+                      res))))))
 
   (testing "handles I2C read failure gracefully when reading all metrics"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "Dump failed"})]
-      (is (match? {:status        :error
-                   :error/reason  :i2c-read-failed
-                   :error/message "Dump failed"}
-                  (sensors/read-sensor-readings :bme280))))))
+      (let [res (sensors/read-sensor-readings :bme280)]
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status        :error
+                     :error/reason  :i2c-read-failed
+                     :error/message "Dump failed"}
+                    res))))))
 
 (deftest read-sensor-readings-seesaw-test
   (testing "reads soil moisture successfully via public API with median noise filtering"
@@ -127,24 +132,26 @@
                                3 {:exit 0 :out "0x00 0x7a" :err ""} ;; 122   (Underflow noise)
                                {:exit 0 :out "0x01 0xf4" :err ""}))
                            {:exit 0 :out "" :err ""}))]
-        (let [res (sensors/read-sensor-readings :seesaw-soil-moisture)]
-          (is (= :ok (:status res)))
-          (is (match? [{:sensor/id    :soil-moisture
-                        :sensor/value 500
-                        :sensor/unit  :capacitive}]
-                      (:readings res)))))))
+        (let [res (sensors/read-sensor-readings :seesaw/moisture)]
+          (is (schema/valid? schema/SensorResponse res))
+          (is (match? {:status :ok
+                       :readings [{:sensor/id    :seesaw/moisture
+                                   :sensor/value 500
+                                   :sensor/unit  :capacitive}]}
+                      res))))))
 
   (testing "reads soil temperature successfully via public API"
     (with-redefs [sh (fn [cmd & _args]
                        (if (= cmd "i2cget")
                          {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}
                          {:exit 0 :out "" :err ""}))]
-      (let [res (sensors/read-sensor-readings :seesaw-soil-temperature)]
-        (is (= :ok (:status res)))
-        (is (match? [{:sensor/id    :soil-temperature
-                      :sensor/value 25.0
-                      :sensor/unit  :celsius}]
-                    (:readings res))))))
+      (let [res (sensors/read-sensor-readings :seesaw/temperature)]
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status :ok
+                     :readings [{:sensor/id    :seesaw/temperature
+                                 :sensor/value 25.0
+                                 :sensor/unit  :celsius}]}
+                    res)))))
 
   (testing "reads combined soil moisture and temperature successfully via public API :seesaw"
     (with-redefs [sh (fn [cmd & args]
@@ -156,19 +163,22 @@
                                               {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}))
                          :else {:exit 0 :out "" :err ""}))]
       (let [res (sensors/read-sensor-readings :seesaw)]
-        (is (= :ok (:status res)))
-        (is (match? [{:sensor/id :soil-moisture :sensor/value 321 :sensor/unit :capacitive}
-                     {:sensor/id :soil-temperature :sensor/value 25.0 :sensor/unit :celsius}]
-                    (:readings res))))))
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status :ok
+                     :readings [{:sensor/id :seesaw/moisture    :sensor/value 321  :sensor/unit :capacitive}
+                                {:sensor/id :seesaw/temperature :sensor/value 25.0 :sensor/unit :celsius}]}
+                    res)))))
 
   (testing "handles hardware I2C error gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "I2C error"})]
-      (is (match? {:status        :error
-                   :error/reason  :i2c-write-failed
-                   :error/message "I2C error"}
-                  (sensors/read-sensor-readings :seesaw-soil-moisture))))))
+      (let [res (sensors/read-sensor-readings :seesaw/moisture)]
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status        :error
+                     :error/reason  :i2c-write-failed
+                     :error/message "I2C error"}
+                    res))))))
 
 (deftest set-sensor-mode-default-test
   (testing "handles fallback :default mode for sensors without mode settings"
     (is (match? {:status :ok}
-                (sensors/set-sensor-mode! :seesaw-soil-moisture :sleep)))))
+                (sensors/set-sensor-mode! :seesaw/moisture :sleep)))))

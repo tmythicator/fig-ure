@@ -3,6 +3,7 @@
   (:require
    [clojure.java.shell :refer [sh]]
    [clojure.string :as string]
+   [fig-ure.schema :as schema]
    [fig-ure.sensors.bme280 :as bme280] ;; [snitch.core :refer [defn*]]
    [fig-ure.sensors.seesaw :as seesaw]
    [fig-ure.util :refer [round-2]]
@@ -54,7 +55,7 @@
     (round-2 val)
     val))
 
-(defmethod format-sensor-value :soil-moisture [_ val]
+(defmethod format-sensor-value :seesaw/moisture [_ val]
   val)
 
 (defn format-reading
@@ -127,7 +128,7 @@
              parsed (bme280/parse-bme280-readings (:out dump) calib)]
          (if (= :ok (:status parsed))
            {:status  :ok
-            :reading (format-reading :bme280-temperature (:temp parsed) :celsius)}
+            :reading (format-reading :bme280/temperature (:temp parsed) :celsius)}
            parsed))
        dump))))
 
@@ -144,9 +145,9 @@
              parsed (bme280/parse-bme280-readings (:out dump) calib)]
          (if (= :ok (:status parsed))
            {:status   :ok
-            :readings [(format-reading :bme280-temperature (:temp parsed) :celsius)
-                       (format-reading :bme280-pressure (:press parsed) :hpa)
-                       (format-reading :bme280-humidity (:hum parsed) :percent)]}
+            :readings [(format-reading :bme280/temperature (:temp parsed) :celsius)
+                       (format-reading :bme280/pressure (:press parsed) :hpa)
+                       (format-reading :bme280/humidity (:hum parsed) :percent)]}
            parsed))
        dump))))
 
@@ -178,7 +179,7 @@
          med-val (seesaw/median valids)]
      (if med-val
        {:status   :ok
-        :readings [(format-reading :soil-moisture med-val :capacitive)]}
+        :readings [(format-reading :seesaw/moisture med-val :capacitive)]}
        (or (first (filter #(= :error (:status %)) samples))
            {:status        :error
             :error/reason  :no-valid-moisture-samples})))))
@@ -190,7 +191,7 @@
    (let [res (read-seesaw-soil-reading bus :status :temperature 4 seesaw/parse-soil-temperature)]
      (if (= :ok (:status res))
        {:status   :ok
-        :readings [(format-reading :soil-temperature (:temperature res) :celsius)]}
+        :readings [(format-reading :seesaw/temperature (:temperature res) :celsius)]}
        res))))
 
 (defn- read-seesaw-readings
@@ -208,7 +209,6 @@
 ;; =============================================================================
 ;; 3. MULTIMETHOD DISPATCH
 ;; =============================================================================
-
 (defmulti set-sensor-mode!
   "Setter for different edge hardware sensors."
   (fn [sensor-id _mode & _args] sensor-id))
@@ -244,22 +244,28 @@
   ([_] (read-sensor-readings :bme280 "1" nil))
   ([_ bus] (read-sensor-readings :bme280 bus nil))
   ([_ bus cached-calib]
-   (read-bme280-readings bus cached-calib)))
+   (schema/validate! schema/SensorResponse (read-bme280-readings bus cached-calib))))
 
 (defmethod read-sensor-readings :seesaw
   ([_] (read-sensor-readings :seesaw "1"))
   ([_ bus]
-   (read-seesaw-readings bus)))
+   (schema/validate!
+    schema/SensorResponse
+    (read-seesaw-readings bus))))
 
-(defmethod read-sensor-readings :seesaw-soil-moisture
-  ([_] (read-sensor-readings :seesaw-soil-moisture "1"))
+(defmethod read-sensor-readings :seesaw/moisture
+  ([_] (read-sensor-readings :seesaw/moisture "1"))
   ([_ bus]
-   (read-seesaw-soil-moisture bus)))
+   (schema/validate!
+    schema/SensorResponse
+    (read-seesaw-soil-moisture bus))))
 
-(defmethod read-sensor-readings :seesaw-soil-temperature
-  ([_] (read-sensor-readings :seesaw-soil-temperature "1"))
+(defmethod read-sensor-readings :seesaw/temperature
+  ([_] (read-sensor-readings :seesaw/temperature "1"))
   ([_ bus]
-   (read-seesaw-soil-temperature bus)))
+   (schema/validate!
+    schema/SensorResponse
+    (read-seesaw-soil-temperature bus))))
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
 ;; -----------------------------------------------------------------------------
@@ -276,9 +282,9 @@
     (println "[Sensors] Seesaw Handshake:" seesaw-decoded)
     {:status       :ready
      :i2c-bus      bus
-     :bme280-id    bme-handshake
+     :bme280/id    bme-handshake
      :calibration  (:calibration calib-res)
-     :seesaw-id    seesaw-decoded}))
+     :seesaw/id    seesaw-decoded}))
 
 (defmethod ig/halt-key! :fig-ure/sensors [_ state]
   (println "[Sensors] Halting sensor reader..." state))
@@ -308,8 +314,8 @@
 
   (read-sensor-readings :bme280)
   (read-sensor-readings :seesaw)
-  (read-sensor-readings :seesaw-soil-moisture)
-  (read-sensor-readings :seesaw-soil-temperature)
+  (read-sensor-readings :seesaw/moisture)
+  (read-sensor-readings :seesaw/temperature)
 
   (read-bme280-calibration)
   (read-bme280-temperature)

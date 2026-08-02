@@ -10,6 +10,7 @@
         metosin/reitit {:mvn/version "0.10.1"}
         cheshire/cheshire {:mvn/version "6.2.0"}
         clj-http/clj-http {:mvn/version "3.13.1"}
+        metosin/malli {:mvn/version "0.20.1"}
         nubank/matcher-combinators {:mvn/version "3.10.1"}}
  :aliases
  {:dev {:extra-paths ["dev" "test"]
