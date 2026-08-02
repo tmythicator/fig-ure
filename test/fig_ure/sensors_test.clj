@@ -154,20 +154,24 @@
                     res)))))
 
   (testing "reads combined soil moisture and temperature successfully via public API :seesaw"
-    (with-redefs [sh (fn [cmd & args]
-                       (cond
-                         (= cmd "i2cset") {:exit 0 :out "" :err ""}
-                         (= cmd "i2cget") (let [len (last args)]
-                                            (if (= len "2")
-                                              {:exit 0 :out "0x01 0x41" :err ""}
-                                              {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}))
-                         :else {:exit 0 :out "" :err ""}))]
-      (let [res (sensors/read-sensor-readings :seesaw)]
-        (is (schema/valid? schema/SensorResponse res))
-        (is (match? {:status :ok
-                     :readings [{:sensor/id :seesaw/moisture    :sensor/value 321  :sensor/unit :capacitive}
-                                {:sensor/id :seesaw/temperature :sensor/value 25.0 :sensor/unit :celsius}]}
-                    res)))))
+    (let [mock-moisture-hex "0x01 0x41"
+          expected-moisture 321
+          mock-temp-hex     "0x00 0x19 0x00 0x00"
+          expected-temp     25.0]
+      (with-redefs [sh (fn [cmd & args]
+                         (cond
+                           (= cmd "i2cset") {:exit 0 :out "" :err ""}
+                           (= cmd "i2cget") (let [len (last args)]
+                                              (if (= len "2")
+                                                {:exit 0 :out mock-moisture-hex :err ""}
+                                                {:exit 0 :out mock-temp-hex     :err ""}))
+                           :else {:exit 0 :out "" :err ""}))]
+        (let [res (sensors/read-sensor-readings :seesaw)]
+          (is (schema/valid? schema/SensorResponse res))
+          (is (match? {:status :ok
+                       :readings [{:sensor/id :seesaw/moisture    :sensor/value expected-moisture :sensor/unit :capacitive}
+                                  {:sensor/id :seesaw/temperature :sensor/value expected-temp     :sensor/unit :celsius}]}
+                      res))))))
 
   (testing "handles hardware I2C error gracefully"
     (with-redefs [sh (fn [& _] {:exit 1 :out "" :err "I2C error"})]

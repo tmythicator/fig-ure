@@ -1,9 +1,24 @@
 (ns fig-ure.schema
   "Domain data contracts and Malli schemas for fig-ure telemetry and sensors."
   (:require [malli.core :as m]
-            [malli.error :as me]))
+            [malli.error :as me]
+            [malli.generator :as mg]))
 
-(set! *warn-on-reflection* true)
+(def SoilMoistureValue
+  "Defined by official Seesaw Spec."
+  [:int {:min 250 :max 2000}])
+
+(def TemperatureValue
+  "Defined by official BME280 + Seesaw Spec."
+  [:double {:min -40.0 :max 85.0}])
+
+(def PressureValue
+  "Defined by official BME280 Spec."
+  [:double {:min 300.0 :max 1100.0}])
+
+(def HumidityValue
+  "Defined by official BME280 Spec."
+  [:double {:min 0.0 :max 100.0}])
 
 (def UnitID
   [:enum
@@ -25,14 +40,29 @@
 (def SensorReading
   [:or
    [:map {:closed true}
-    [:sensor/id [:and SensorID [:not [:= :camera/snapshot]]]]
-    [:sensor/value number?]
-    [:sensor/unit [:and UnitID [:not [:= :file]]]]
+    [:sensor/id [:= :seesaw/moisture]]
+    [:sensor/value SoilMoistureValue]
+    [:sensor/unit [:= :capacitive]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
-    [:sensor/id [:and SensorID [:= :camera/snapshot]]]
+    [:sensor/id [:enum :bme280/temperature :seesaw/temperature]]
+    [:sensor/value TemperatureValue]
+    [:sensor/unit [:= :celsius]]
+    [:sensor/timestamp int?]]
+   [:map {:closed true}
+    [:sensor/id [:= :bme280/pressure]]
+    [:sensor/value PressureValue]
+    [:sensor/unit [:= :hpa]]
+    [:sensor/timestamp int?]]
+   [:map {:closed true}
+    [:sensor/id [:= :bme280/humidity]]
+    [:sensor/value HumidityValue]
+    [:sensor/unit [:= :percent]]
+    [:sensor/timestamp int?]]
+   [:map {:closed true}
+    [:sensor/id [:= :camera/snapshot]]
     [:sensor/value string?]
-    [:sensor/unit [:and UnitID [:= :file]]]
+    [:sensor/unit [:= :file]]
     [:sensor/timestamp int?]]])
 
 (def SensorResponse
@@ -40,10 +70,16 @@
    [:map {:closed true}
     [:status [:enum :error]]
     [:error/reason keyword?]
-    [:error/message {:optional true} string?]]
+    [:error/message {:optional true} string?]
+    [:error/data {:optional true} any?]]
    [:map {:closed true}
     [:status [:enum :ok]]
     [:readings [:vector SensorReading]]]])
+
+(defn valid?
+  "Returns true if data conforms to schema."
+  [schema data]
+  (m/validate schema data))
 
 (defn validate!
   "Validates data against schema. Throws ex-info with humanized explanation if invalid."
@@ -58,10 +94,18 @@
                        :humanized human-err
                        :error data})))))
 
-(defn valid?
-  "Returns true if data conforms to schema."
+(defn safe-validate!
+  "Validates data against schema SAFELY.
+  If hardware produced bad value, turns it into {:status :error} return map instead of throwing!"
   [schema data]
-  (m/validate schema data))
+  (if (valid? schema data)
+    data
+    (let [explain (m/explain schema data)
+          human-err (me/humanize explain)]
+      {:status        :error
+       :error/reason  :schema/validation-error
+       :error/message (str "Schema validation failed: " (pr-str human-err))
+       :error/data data})))
 
 (comment
   (m/schema? (m/schema UnitID))
@@ -78,9 +122,18 @@
   (-> (m/schema? SensorReading)
       (me/humanize))
 
+  (safe-validate! SensorResponse
+                  {:status :ok
+                   :readings [{:sensor/id :bme280/temperature
+                               :sensor/value -333.2
+                               :sensor/unit :celsius
+                               :sensor/timestamp 1785658576925}]})
+
   (validate! SensorResponse
              {:status :ok
               :readings [{:sensor/id :bme280/temperature
-                          :sensor/value 26.2
+                          :sensor/value -126.2
                           :sensor/unit :celsius
-                          :sensor/timestamp 1785658576925}]}))
+                          :sensor/timestamp 1785658576925}]})
+
+  (mg/generate SensorReading))

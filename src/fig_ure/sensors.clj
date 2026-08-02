@@ -244,26 +244,28 @@
   ([_] (read-sensor-readings :bme280 "1" nil))
   ([_ bus] (read-sensor-readings :bme280 bus nil))
   ([_ bus cached-calib]
-   (schema/validate! schema/SensorResponse (read-bme280-readings bus cached-calib))))
+   (schema/safe-validate!
+    schema/SensorResponse
+    (read-bme280-readings bus cached-calib))))
 
 (defmethod read-sensor-readings :seesaw
   ([_] (read-sensor-readings :seesaw "1"))
   ([_ bus]
-   (schema/validate!
+   (schema/safe-validate!
     schema/SensorResponse
     (read-seesaw-readings bus))))
 
 (defmethod read-sensor-readings :seesaw/moisture
   ([_] (read-sensor-readings :seesaw/moisture "1"))
   ([_ bus]
-   (schema/validate!
+   (schema/safe-validate!
     schema/SensorResponse
     (read-seesaw-soil-moisture bus))))
 
 (defmethod read-sensor-readings :seesaw/temperature
   ([_] (read-sensor-readings :seesaw/temperature "1"))
   ([_ bus]
-   (schema/validate!
+   (schema/safe-validate!
     schema/SensorResponse
     (read-seesaw-soil-temperature bus))))
 ;; -----------------------------------------------------------------------------
