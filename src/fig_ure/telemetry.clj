@@ -23,8 +23,8 @@
   ([buf-size]
    (async/chan (async/sliding-buffer buf-size))))
 
-(defn- start-generic-producer!
-  [name out-chan stop-chan interval-ms produce-fn trans-fn]
+(defn- start-sensor-producer!
+  [name out-chan stop-chan interval-ms produce-fn]
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
       (if (= port stop-chan)
@@ -39,10 +39,34 @@
           (if (= (:status res) :ok)
             (async/>! out-chan {:event/type    :producer-data
                                 :producer/name name
-                                :data          (trans-fn res)})
+                                :data          (:readings res)})
             (async/>! out-chan {:event/type    :producer-error
                                 :producer/name name
                                 :error         res}))
+          (recur))))))
+
+(defn- start-camera-producer!
+  [out-chan stop-chan interval-ms]
+  (async/go-loop []
+    (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
+      (if (= port stop-chan)
+        (async/>! out-chan {:event/type    :producer-stopped
+                            :producer/name "Camera"})
+        (do
+          (async/thread
+            (let [res (try
+                        (camera/take-snapshot!)
+                        (catch Exception e
+                          {:status        :error
+                           :error/reason  :execution-failed
+                           :error/message (.getMessage e)}))]
+              (if (= (:status res) :ok)
+                (async/>!! out-chan {:event/type    :producer-data
+                                     :producer/name "Camera"
+                                     :data          [(camera/format-snapshot-reading (:file-path res))]})
+                (async/>!! out-chan {:event/type    :producer-error
+                                     :producer/name "Camera"
+                                     :error         res}))))
           (recur))))))
 
 (defn- start-generic-consumer!
@@ -81,20 +105,16 @@
         bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
         seesaw-produce #(sensors/read-sensor-readings :seesaw bus)]
 
-    (start-generic-producer! "BME280" sensor-chan stop-chan
-                             (:sensor-interval-ms sys-config)
-                             bme280-produce
-                             :readings)
+    (start-sensor-producer! "BME280" sensor-chan stop-chan
+                            (:sensor-interval-ms sys-config)
+                            bme280-produce)
 
-    (start-generic-producer! "Seesaw" sensor-chan stop-chan
-                             (:sensor-interval-ms sys-config)
-                             seesaw-produce
-                             :readings)
+    (start-sensor-producer! "Seesaw" sensor-chan stop-chan
+                            (:sensor-interval-ms sys-config)
+                            seesaw-produce)
 
-    (start-generic-producer! "Camera" camera-chan stop-chan
-                             (:camera-interval-ms sys-config)
-                             stream/take-snapshot!
-                             (fn [res] [(sensors/format-reading :camera-snapshot (:file-path res) :file)]))
+    (start-camera-producer! camera-chan stop-chan
+                            (:camera-interval-ms sys-config))
 
     (start-telemetry-consumer! stop-chan sensor-chan camera-chan)
 

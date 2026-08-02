@@ -5,17 +5,16 @@
             [fig-ure.camera :as camera]
             [fig-ure.telemetry :as telemetry]))
 
-(deftest start-generic-producer-exception-resilience-test
+(deftest start-sensor-producer-exception-resilience-test
   (testing "producer catches RuntimeException and emits :producer-error event without crashing worker loop"
     (let [out-chan  (async/chan 10)
           stop-chan (async/chan)
           counter   (atom 0)
-          _         (#'telemetry/start-generic-producer!
+          _         (#'telemetry/start-sensor-producer!
                      "Failing Hardware" out-chan stop-chan 20
                      (fn []
                        (swap! counter inc)
-                       (throw (RuntimeException. "I2C Bus Hardware Failure")))
-                     identity)]
+                       (throw (RuntimeException. "I2C Bus Hardware Failure"))))]
       (Thread/sleep 80)
       (async/close! stop-chan)
       (let [events (loop [acc []]
@@ -49,7 +48,7 @@
 (deftest telemetry-pipeline-resilience-test
   (testing "start-telemetry-pipeline handles crashing producers without blowing up async channels"
     (with-redefs [sensors/read-sensor-readings (fn [& _] (throw (RuntimeException. "Hardware bus error")))
-                  stream/take-snapshot!        (fn [& _] (throw (RuntimeException. "Camera process error")))]
+                  camera/take-snapshot!        (fn [& _] (throw (RuntimeException. "Camera process error")))]
       (let [sys-config {:sensor-buf-size    5
                         :camera-buf-size    5
                         :sensor-interval-ms 50
