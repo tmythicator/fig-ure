@@ -2,7 +2,6 @@
   (:require
    [clojure.core.async :as async]
    [clojure.test :refer [deftest is testing]]
-   [fig-ure.camera :as camera]
    [fig-ure.domain :as domain]
    [fig-ure.sensors :as sensors]
    [fig-ure.telemetry :as telemetry]
@@ -50,12 +49,9 @@
 
 (deftest telemetry-pipeline-resilience-test
   (testing "start-telemetry-pipeline handles crashing producers without blowing up async channels"
-    (with-redefs [sensors/read-sensor-readings (fn [& _] (throw (RuntimeException. "Hardware bus error")))
-                  camera/take-snapshot!        (fn [& _] (throw (RuntimeException. "Camera process error")))]
+    (with-redefs [sensors/read-sensor-readings (fn [& _] (throw (RuntimeException. "Hardware bus error")))]
       (let [sys-config {:sensor-buf-size    5
-                        :camera-buf-size    5
-                        :sensor-interval-ms 50
-                        :camera-interval-ms 50}
+                        :sensor-interval-ms 50}
             failing-sensors {:i2c-bus "1" :calibration nil}
             state (#'telemetry/start-telemetry-pipeline! sys-config failing-sensors)]
         (is (= :ready (:status state)))
