@@ -3,7 +3,7 @@
   (:require [fig-ure.core :as core]
             [fig-ure.sensors]
             [fig-ure.telemetry]
-            [fig-ure.stream]
+            [fig-ure.camera]
             [fig-ure.api]
             [integrant.repl :refer [go halt  reset]]))
 

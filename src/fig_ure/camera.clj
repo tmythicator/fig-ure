@@ -1,5 +1,5 @@
-(ns fig-ure.stream
-  "Process lifecycle manager for local ffmpeg webcam ingestion, snapshots, and YouTube Live streaming."
+(ns fig-ure.camera
+  "Process lifecycle manager for local camera snapshots, rpicam-still, and hardware video capture."
   (:require
    [babashka.fs :as fs]
    [clojure.java.shell :as sh]
@@ -27,6 +27,14 @@
    (fs/create-dirs dir-path)
    (str (fs/absolutize dir-path))))
 
+(defn format-snapshot-reading
+  "Formats a camera snapshot file path into a Malli-compliant SensorReading telemetry map."
+  [file-path]
+  {:sensor/id        :camera/snapshot
+   :sensor/value     file-path
+   :sensor/unit      :file
+   :sensor/timestamp (System/currentTimeMillis)})
+
 (defn take-snapshot!
   "Creates snapshot and places in into the configured folder."
   ([] (take-snapshot! (:snapshots-dir config)))
@@ -43,13 +51,13 @@
         :error/reason  :camera-capture-failed
         :error/message (:err res)}))))
 
-(defmethod ig/init-key :fig-ure/stream [_ config]
-  (println "Initializing video stream manager..." config)
+(defmethod ig/init-key :fig-ure/camera [_ config]
+  (println "Initializing camera hardware manager..." config)
   (ensure-snapshots-dir!)
   {:status :ready})
 
-(defmethod ig/halt-key! :fig-ure/stream [_ state]
-  (println "Halting video stream manager..." state))
+(defmethod ig/halt-key! :fig-ure/camera [_ state]
+  (println "Halting camera hardware manager..." state))
 
 (comment
   ;; Interactive REPL scratchpad

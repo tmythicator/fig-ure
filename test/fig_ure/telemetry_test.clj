@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as async]
             [clojure.test :refer [deftest is testing]]
             [fig-ure.sensors :as sensors]
-            [fig-ure.stream :as stream]
+            [fig-ure.camera :as camera]
             [fig-ure.telemetry :as telemetry]))
 
 (deftest start-generic-producer-exception-resilience-test

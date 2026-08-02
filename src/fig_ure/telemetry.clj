@@ -2,8 +2,8 @@
   "Background worker for batching and pushing telemetry metrics to InfluxDB Cloud or local storage."
   (:require
    [clojure.core.async :as async]
+   [fig-ure.camera :as camera]
    [fig-ure.sensors :as sensors]
-   [fig-ure.stream :as stream]
    [fig-ure.util :as util]
    [integrant.core :as ig]))
 

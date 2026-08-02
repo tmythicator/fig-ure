@@ -1,15 +1,25 @@
-(ns fig-ure.stream-test
+(ns fig-ure.camera-test
   (:require [babashka.fs :as fs]
             [clojure.java.shell :as sh]
             [clojure.test :refer [deftest is testing]]
-            [fig-ure.stream :as stream]
+            [fig-ure.camera :as camera]
+            [fig-ure.schema :as schema]
             [matcher-combinators.test :refer [match?]]))
+
+(deftest format-snapshot-reading-test
+  (testing "formats file path into a Malli-compliant SensorReading telemetry map"
+    (let [reading (camera/format-snapshot-reading "/data/snapshots/snapshot-123.jpg")]
+      (is (schema/valid? schema/SensorReading reading))
+      (is (match? {:sensor/id    :camera/snapshot
+                   :sensor/value "/data/snapshots/snapshot-123.jpg"
+                   :sensor/unit  :file}
+                  reading)))))
 
 (deftest ensure-snapshots-dir!-test
   (testing "creates temporary snapshot directory if it does not exist"
     (let [temp-dir (str (fs/create-temp-dir {:prefix "fig-test-snapshots-"}))]
       (try
-        (let [created-path (stream/ensure-snapshots-dir! temp-dir)]
+        (let [created-path (camera/ensure-snapshots-dir! temp-dir)]
           (is (fs/exists? created-path))
           (is (fs/directory? created-path)))
         (finally
@@ -25,7 +35,7 @@
                                     out-file (nth args (inc o-idx))]
                                 (spit out-file "fake-jpg-binary-content")
                                 {:exit 0 :out "" :err ""}))]
-          (let [res (stream/take-snapshot! temp-dir)]
+          (let [res (camera/take-snapshot! temp-dir)]
             (is (match? {:status :ok} (select-keys res [:status])))
             (is (fs/exists? (:file-path res)))
             (is (number? (:timestamp res)))))
@@ -39,7 +49,7 @@
           (is (match? {:status        :error
                        :error/reason  :camera-capture-failed
                        :error/message "Device timeout detected"}
-                      (stream/take-snapshot! temp-dir))))
+                      (camera/take-snapshot! temp-dir))))
         (finally
           (fs/delete-tree temp-dir)))))
 
@@ -48,6 +58,6 @@
       (try
         (with-redefs [sh/sh (fn [& _] (throw (java.io.IOException. "Cannot run program \"rpicam-still\": Exec failed")))]
           (is (thrown? java.io.IOException
-                       (stream/take-snapshot! temp-dir))))
+                       (camera/take-snapshot! temp-dir))))
         (finally
           (fs/delete-tree temp-dir))))))
