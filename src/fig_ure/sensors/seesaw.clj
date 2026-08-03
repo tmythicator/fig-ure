@@ -23,7 +23,8 @@
   "Adafruit Seesaw default configuration and expected hardware ID."
   {:hardware-id-val   "0x36"
    :default-bus       "1"
-   :i2c-read-delay-ms 10})
+   :i2c-read-delay-ms 10
+   :moisture-samples  3})
 
 (defn decode-hardware-id
   "Decodes raw hardware ID from Seesaw chip and checks if valid (0x36)."

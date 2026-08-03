@@ -105,7 +105,6 @@
   ([] (read-bme280-readings "1" nil))
   ([bus] (read-bme280-readings bus nil))
   ([bus cached-calib]
-   (set-sensor-mode! :bme280 :normal bus)
    (let [dump (fetch-i2cdump bus bme280/i2c-addr)]
      (if (= :ok (:status dump))
        (let [calib  (or cached-calib (:calibration (read-bme280-calibration bus)))
@@ -135,10 +134,12 @@
        set-res))))
 
 (defn- read-seesaw-soil-moisture
-  "Reads soil moisture from Adafruit Seesaw sensor using median filtering over 8 samples."
-  ([] (read-seesaw-soil-moisture "1"))
-  ([bus]
-   (let [samples (repeatedly 8 #(read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))
+  "Reads soil moisture from Adafruit Seesaw sensor using median filtering over `sample-count` samples."
+  ([] (read-seesaw-soil-moisture "1" (:moisture-samples seesaw/config)))
+  ([bus] (read-seesaw-soil-moisture bus (:moisture-samples seesaw/config)))
+  ([bus sample-count]
+   (let [n-samples (or sample-count (:moisture-samples seesaw/config))
+         samples (repeatedly n-samples #(read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))
          valids  (->> samples
                       (filter #(= :ok (:status %)))
                       (map :moisture)
@@ -163,9 +164,10 @@
 
 (defn- read-seesaw-readings
   "Reads both soil moisture and soil temperature sequentially from Adafruit Seesaw sensor."
-  ([] (read-seesaw-readings "1"))
-  ([bus]
-   (let [m-res (read-seesaw-soil-moisture bus)
+  ([] (read-seesaw-readings "1" (:moisture-samples seesaw/config)))
+  ([bus] (read-seesaw-readings bus (:moisture-samples seesaw/config)))
+  ([bus sample-count]
+   (let [m-res (read-seesaw-soil-moisture bus sample-count)
          t-res (read-seesaw-soil-temperature bus)]
      (if (and (= :ok (:status m-res)) (= :ok (:status t-res)))
        {:status   :ok
@@ -217,10 +219,11 @@
 
 (defmethod read-sensor-readings :seesaw
   ([_] (read-sensor-readings :seesaw "1"))
-  ([_ bus]
+  ([_ bus] (read-sensor-readings :seesaw bus (:moisture-samples seesaw/config)))
+  ([_ bus sample-count]
    (schema/safe-validate!
     schema/SensorResponse
-    (read-seesaw-readings bus))))
+    (read-seesaw-readings bus sample-count))))
 
 (defmethod read-sensor-readings :seesaw/moisture
   ([_] (read-sensor-readings :seesaw/moisture "1"))
@@ -276,15 +279,24 @@
                 :press (round-2 (:press readings))
                 :hum (round-2 (:hum readings))}})
 
+  (time (fig-ure.sensors/read-sensor-readings :bme280))
+
+  (let [calib (:calibration (fig-ure.sensors/read-bme280-calibration "1"))]
+    (time (fig-ure.sensors/read-sensor-readings :bme280 "1" calib)))
+
   (set-sensor-mode! :bme280 :normal)
   (time (fetch-i2cdump "1" bme280/i2c-addr))
   (:out (fetch-i2cdump "1" bme280/i2c-addr))
   (time (read-bme280-readings))
 
-  (read-sensor-readings :bme280)
+  (time (read-sensor-readings :bme280))
   (read-sensor-readings :seesaw)
   (read-sensor-readings :seesaw/moisture)
   (read-sensor-readings :seesaw/temperature)
+
+  (time (read-sensor-readings :seesaw "1" 1))
+  (time (read-sensor-readings :seesaw "1" 3))
+  (time (read-sensor-readings :seesaw "1" 8))
 
   (read-bme280-calibration)
   (read-bme280-temperature)
