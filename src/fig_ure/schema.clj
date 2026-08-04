@@ -35,6 +35,7 @@
    :bme280/temperature
    :seesaw/moisture
    :seesaw/temperature
+   :cpu/temperature
    :camera/snapshot])
 
 (def SensorReading
@@ -45,7 +46,7 @@
     [:sensor/unit [:= :capacitive]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
-    [:sensor/id [:enum :bme280/temperature :seesaw/temperature]]
+    [:sensor/id [:enum :bme280/temperature :seesaw/temperature :cpu/temperature]]
     [:sensor/value TemperatureValue]
     [:sensor/unit [:= :celsius]]
     [:sensor/timestamp int?]]

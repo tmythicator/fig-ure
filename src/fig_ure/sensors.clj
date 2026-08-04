@@ -53,7 +53,7 @@
   (domain/make-reading sensor-id raw-val unit))
 
 ;; =============================================================================
-;; 2. BME280 READERS
+;; 2. SENSOR READERS
 ;; =============================================================================
 
 (declare set-sensor-mode!)
@@ -175,6 +175,19 @@
        (or (when-not (= :ok (:status m-res)) m-res)
            t-res)))))
 
+(defn read-cpu-temperature
+  "Reads Raspberry Pi CPU temperature in Celsius from sysfs."
+  []
+  (try
+    (let [raw-str (clojure.string/trim (slurp "/sys/class/thermal/thermal_zone0/temp"))
+          milli-c (Double/parseDouble raw-str)]
+      {:status   :ok
+       :readings [(domain/make-reading :cpu/temperature (/ milli-c 1000.0) :celsius)]})
+    (catch Exception e
+      {:status        :error
+       :error/reason  :cpu-temp-read-failed
+       :error/message (.getMessage e)})))
+
 ;; =============================================================================
 ;; 3. MULTIMETHOD DISPATCH
 ;; =============================================================================
@@ -238,6 +251,13 @@
    (schema/safe-validate!
     schema/SensorResponse
     (read-seesaw-soil-temperature bus))))
+
+(defmethod read-sensor-readings :cpu/temperature
+  [& _]
+  (schema/safe-validate!
+   schema/SensorResponse
+   (read-cpu-temperature)))
+
 ;; -----------------------------------------------------------------------------
 ;; Integrant Lifecycle Methods
 ;; -----------------------------------------------------------------------------

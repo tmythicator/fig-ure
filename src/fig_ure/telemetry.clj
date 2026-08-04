@@ -80,7 +80,8 @@
         bus (or (:i2c-bus sensors-component) "1")
         calib (:calibration sensors-component)
         bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
-        seesaw-produce #(sensors/read-sensor-readings :seesaw bus)]
+        seesaw-produce #(sensors/read-sensor-readings :seesaw bus)
+        cpu-produce    #(sensors/read-cpu-temperature)]
 
     (start-sensor-producer! "BME280" sensor-chan stop-chan
                             (:sensor-interval-ms sys-config)
@@ -89,6 +90,10 @@
     (start-sensor-producer! "Seesaw" sensor-chan stop-chan
                             (:sensor-interval-ms sys-config)
                             seesaw-produce)
+
+    (start-sensor-producer! "CPU" sensor-chan stop-chan
+                            (:sensor-interval-ms sys-config)
+                            cpu-produce)
 
     (start-telemetry-consumer! stop-chan sensor-chan sys-config)
 

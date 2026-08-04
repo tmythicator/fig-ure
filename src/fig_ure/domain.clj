@@ -47,14 +47,10 @@
    :producer/name producer-name})
 
 (defn- format-line-protocol-values
-  "Formats field numeric value according to InfluxDB Line Protocol type rules:
-   - Integers get 'i' suffix
-   - Floats/doubles remain unquoted"
+  "Formats numeric sensor values consistently as double/float for InfluxDB IOx column schema compatibility."
   [value]
-  (cond
-    (integer? value) (str value "i")
-    (number? value) (str value)
-    :else nil))
+  (when (number? value)
+    (str (double value))))
 
 (defn reading->line-protocol
   "Transforms a SensorReading into a single Line Protocol line string.

@@ -154,3 +154,23 @@
   (testing "handles fallback :default mode for sensors without mode settings"
     (is (match? {:status :ok}
                 (sensors/set-sensor-mode! :seesaw/moisture :sleep)))))
+
+(deftest read-sensor-readings-cpu-test
+  (testing "reads CPU temperature successfully and conforms to Malli SensorResponse schema"
+    (with-redefs [slurp (fn [_] "42350\n")]
+      (let [res (sensors/read-sensor-readings :cpu/temperature)]
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status :ok
+                     :readings [{:sensor/id    :cpu/temperature
+                                 :sensor/value 42.35
+                                 :sensor/unit  :celsius}]}
+                    res)))))
+
+  (testing "handles sysfs read exception gracefully and produces valid error SensorResponse schema"
+    (with-redefs [slurp (fn [_] (throw (java.io.FileNotFoundException. "Sysfs missing")))]
+      (let [res (sensors/read-sensor-readings :cpu/temperature)]
+        (is (schema/valid? schema/SensorResponse res))
+        (is (match? {:status        :error
+                     :error/reason  :cpu-temp-read-failed
+                     :error/message "Sysfs missing"}
+                    res))))))
