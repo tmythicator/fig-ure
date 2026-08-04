@@ -47,6 +47,19 @@
         :error/reason  :i2c-read-failed
         :error/message (string/trim (:err result))}))))
 
+(defn- fetch-i2c-read-bytes
+  "Reads `read-len` bytes from chip address via i2ctransfer without resetting register pointer."
+  ([chip-addr read-len] (fetch-i2c-read-bytes "1" chip-addr read-len))
+  ([bus chip-addr read-len]
+   (let [read-op (format "r%d@%s" read-len chip-addr)
+         result  (sh "i2ctransfer" "-y" bus read-op)]
+     (if (zero? (:exit result))
+       {:status :ok
+        :out    (string/trim (:out result))}
+       {:status        :error
+        :error/reason  :i2c-read-failed
+        :error/message (string/trim (:err result))}))))
+
 (defn- format-reading
   "Delegates to domain/make-reading."
   [sensor-id raw-val unit]
@@ -118,7 +131,7 @@
        dump))))
 
 (defn- read-seesaw-soil-reading
-  "Generic reader for Seesaw Soil metrics (moisture or temperature)."
+  "Generic reader for Seesaw Soil metrics using 2-step write, 10ms delay, and pure read."
   ([base-key offset-key bytes-len parse-fn]
    (read-seesaw-soil-reading "1" base-key offset-key bytes-len parse-fn))
   ([bus base-key offset-key bytes-len parse-fn]
@@ -126,11 +139,12 @@
          offset-hex (format "0x%02X" (get seesaw/function-offsets offset-key))
          set-res    (write-i2cset! bus seesaw/i2c-addr base-hex offset-hex)]
      (if (= :ok (:status set-res))
-       (let [_       (Thread/sleep ^long (:i2c-read-delay-ms seesaw/config))
-             get-res (fetch-i2cget bus seesaw/i2c-addr "0x00" "i" bytes-len)]
-         (if (= :ok (:status get-res))
-           (parse-fn (string/split (:out get-res) #"\s+"))
-           get-res))
+       (do
+         (Thread/sleep ^long (:i2c-read-delay-ms seesaw/config))
+         (let [get-res (fetch-i2c-read-bytes bus seesaw/i2c-addr bytes-len)]
+           (if (= :ok (:status get-res))
+             (parse-fn (string/split (:out get-res) #"\s+"))
+             get-res)))
        set-res))))
 
 (defn- read-seesaw-soil-moisture
@@ -310,7 +324,7 @@
   (time (read-bme280-readings))
 
   (time (read-sensor-readings :bme280))
-  (read-sensor-readings :seesaw)
+  (time (read-sensor-readings :seesaw))
   (read-sensor-readings :seesaw/moisture)
   (read-sensor-readings :seesaw/temperature)
 

@@ -92,14 +92,15 @@
   (testing "reads soil moisture successfully via public API with median noise filtering"
     (let [counter (atom 0)]
       (with-redefs [sh (fn [cmd & _args]
-                         (if (= cmd "i2cget")
-                           (let [c (swap! counter inc)]
-                             (case c
-                               1 {:exit 0 :out "0x83 0xeb" :err ""} ;; 33771 (Garbage noise)
-                               2 {:exit 0 :out "0x01 0xf4" :err ""} ;; 500   (Valid reading)
-                               3 {:exit 0 :out "0x00 0x7a" :err ""} ;; 122   (Underflow noise)
-                               {:exit 0 :out "0x01 0xf4" :err ""}))
-                           {:exit 0 :out "" :err ""}))]
+                         (cond
+                           (= cmd "i2cset") {:exit 0 :out "" :err ""}
+                           (= cmd "i2ctransfer") (let [c (swap! counter inc)]
+                                                   (case c
+                                                     1 {:exit 0 :out "0x83 0xeb" :err ""} ;; 33771 (Garbage noise)
+                                                     2 {:exit 0 :out "0x01 0xf4" :err ""} ;; 500   (Valid reading)
+                                                     3 {:exit 0 :out "0x00 0x7a" :err ""} ;; 122   (Underflow noise)
+                                                     {:exit 0 :out "0x01 0xf4" :err ""}))
+                           :else {:exit 0 :out "" :err ""}))]
         (let [res (sensors/read-sensor-readings :seesaw/moisture)]
           (is (schema/valid? schema/SensorResponse res))
           (is (match? {:status :ok
@@ -110,9 +111,10 @@
 
   (testing "reads soil temperature successfully via public API"
     (with-redefs [sh (fn [cmd & _args]
-                       (if (= cmd "i2cget")
-                         {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}
-                         {:exit 0 :out "" :err ""}))]
+                       (cond
+                         (= cmd "i2cset") {:exit 0 :out "" :err ""}
+                         (= cmd "i2ctransfer") {:exit 0 :out "0x00 0x19 0x00 0x00" :err ""}
+                         :else {:exit 0 :out "" :err ""}))]
       (let [res (sensors/read-sensor-readings :seesaw/temperature)]
         (is (schema/valid? schema/SensorResponse res))
         (is (match? {:status :ok
@@ -129,10 +131,10 @@
       (with-redefs [sh (fn [cmd & args]
                          (cond
                            (= cmd "i2cset") {:exit 0 :out "" :err ""}
-                           (= cmd "i2cget") (let [len (last args)]
-                                              (if (= len "2")
-                                                {:exit 0 :out mock-moisture-hex :err ""}
-                                                {:exit 0 :out mock-temp-hex     :err ""}))
+                           (= cmd "i2ctransfer") (let [read-op (last args)]
+                                                   (if (= read-op "r2@0x36")
+                                                     {:exit 0 :out mock-moisture-hex :err ""}
+                                                     {:exit 0 :out mock-temp-hex     :err ""}))
                            :else {:exit 0 :out "" :err ""}))]
         (let [res (sensors/read-sensor-readings :seesaw)]
           (is (schema/valid? schema/SensorResponse res))
