@@ -1,6 +1,7 @@
 (ns fig-ure.telemetry
   "Background worker for batching and pushing telemetry metrics to InfluxDB Cloud or local storage."
   (:require
+   [clj-http.client :as client]
    [clojure.core.async :as async]
    [fig-ure.domain :as domain]
    [fig-ure.sensors :as sensors]
@@ -33,18 +34,40 @@
             (async/>! out-chan (domain/make-telemetry-error-event name res)))
           (recur))))))
 
+(defn- push-telemetry-batch!
+  [influx-config readings]
+  (let [{:keys [influx/url influx/token influx/bucket influx/org]} influx-config
+        payload (domain/readings->payload readings)]
+    (when (seq payload)
+      (try
+        (client/post (str url "/api/v2/write")
+                     {:query-params {"org"       org
+                                     "bucket"    bucket
+                                     "precision" "ms"}
+                      :headers      {"Authorization" (str "Token " token)
+                                     "Content-Type"  "text/plain; charset=utf-8"}
+                      :body         payload
+                      :async?       false})
+
+        (catch Exception e
+          (util/log-message! "Telemetry Worker" (str "Failed to push batch to InfluxDB: " (.getMessage e))))))))
+
 (defn- start-telemetry-consumer!
-  [stop-chan sensor-chan]
-  (async/go-loop []
-    (let [[val port] (async/alts! [sensor-chan stop-chan])]
-      (if (= port stop-chan)
-        (util/log-message! "Telemetry Consumer" "Received stop signal. Exiting.")
-        (do
-          (try
-            (util/log-telemetry-event! "Telemetry Consumer" val)
-            (catch Exception e
-              (util/log-message! "Telemetry Consumer" (str "Handler error: " (.getMessage e)))))
-          (recur))))))
+  ([stop-chan sensor-chan]
+   (start-telemetry-consumer! stop-chan sensor-chan nil))
+  ([stop-chan sensor-chan influx-config]
+   (async/go-loop []
+     (let [[val port] (async/alts! [sensor-chan stop-chan])]
+       (if (= port stop-chan)
+         (util/log-message! "Telemetry Consumer" "Received stop signal. Exiting.")
+         (do
+           (try
+             (util/log-telemetry-event! "Telemetry Consumer" val)
+             (when (and influx-config (= (:event/type val) :producer-data))
+               (push-telemetry-batch! influx-config (:data val)))
+             (catch Exception e
+               (util/log-message! "Telemetry Consumer" (str "Handler error: " (.getMessage e)))))
+           (recur)))))))
 
 (defn- start-telemetry-pipeline!
   [sys-config sensors-component]
@@ -63,7 +86,7 @@
                             (:sensor-interval-ms sys-config)
                             seesaw-produce)
 
-    (start-telemetry-consumer! stop-chan sensor-chan)
+    (start-telemetry-consumer! stop-chan sensor-chan sys-config)
 
     {:status :ready
      :stop-chan stop-chan

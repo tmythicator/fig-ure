@@ -1,6 +1,8 @@
 (ns fig-ure.domain
   "Pure domain entity constructors and value transformers for telemetry readings."
-  (:require [fig-ure.util :refer [round-2]]))
+  (:require
+   [fig-ure.util :refer [round-2]]
+   [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
 
@@ -44,4 +46,42 @@
   {:event/type    :producer-stopped
    :producer/name producer-name})
 
+(defn- format-line-protocol-values
+  "Formats field numeric value according to InfluxDB Line Protocol type rules:
+   - Integers get 'i' suffix
+   - Floats/doubles remain unquoted"
+  [value]
+  (cond
+    (integer? value) (str value "i")
+    (number? value) (str value)
+    :else nil))
 
+(defn reading->line-protocol
+  "Transforms a SensorReading into a single Line Protocol line string.
+   Returns formatted string, or nil if reading is invalid or non-numeric."
+  [{:keys [sensor/id sensor/value sensor/unit sensor/timestamp] :as _reading}]
+  (when (and id value unit timestamp)
+    (when-let [val-str (format-line-protocol-values value)]
+      (let [id-str (if (keyword? id) (subs (str id) 1) (str id))
+            unit-str (if (keyword? unit) (name unit) (str unit))]
+        (format "telemetry,sensor_id=%s,unit=%s value=%s %d"
+                id-str
+                unit-str
+                val-str
+                timestamp)))))
+
+(defn readings->payload
+  "Transforms a SensorReading vector into a HTTP request payload."
+  [readings]
+  (->> readings
+       (keep reading->line-protocol)
+       (str/join "\n")))
+
+(comment
+  (name :elol/test)
+  (reading->line-protocol
+   {:sensor/id        :bme280/temperature
+    :sensor/value     "asf"
+    :sensor/unit      :celsius
+    :sensor/timestamp 1785658576925})
+  (format-line-protocol-values nil))

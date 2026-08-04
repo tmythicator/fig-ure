@@ -15,7 +15,11 @@
 
    :fig-ure/telemetry {:sensors            (ig/ref :fig-ure/sensors)
                        :sensor-interval-ms 5000
-                       :sensor-buf-size    200}
+                       :sensor-buf-size    200
+                       :influx/url    (System/getenv "INFLUX_URL")
+                       :influx/token  (System/getenv "INFLUX_TOKEN")
+                       :influx/bucket (or (System/getenv "INFLUX_BUCKET") "fig-ure")
+                       :influx/org    (System/getenv "INFLUX_ORG")}
 
    :fig-ure/stream    {:timelapse-interval-ms 3600000 ;; 1 hour
                        :snapshots-dir         "data/snapshots"}
