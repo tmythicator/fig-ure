@@ -50,7 +50,11 @@
                       :async?       false})
 
         (catch Exception e
-          (util/log-message! "Telemetry Worker" (str "Failed to push batch to InfluxDB: " (.getMessage e))))))))
+          (let [err-body (some-> (ex-data e) :body)]
+            (util/log-message! "Telemetry Worker"
+                               (str "Failed to push batch to InfluxDB: "
+                                    (.getMessage e)
+                                    (when err-body (str " | Details: " err-body))))))))
 
 (defn- start-telemetry-consumer!
   ([stop-chan sensor-chan]
