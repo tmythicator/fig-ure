@@ -7,7 +7,7 @@
    [fig-ure.schema :as schema]
    [fig-ure.sensors.bme280 :as bme280] ;; [snitch.core :refer [defn*]]
    [fig-ure.sensors.seesaw :as seesaw]
-   [fig-ure.util :refer [round-2]]
+   [fig-ure.util :as util]
    [integrant.core :as ig]))
 
 (defn- write-i2cset!
@@ -132,6 +132,16 @@
            parsed))
        dump))))
 
+(defn- execute-seesaw-transfer
+  "Executes a 2-step Seesaw I2C transaction: write register address, wait delay, read N bytes."
+  [bus base-hex offset-hex bytes-len]
+  (let [set-res (write-i2cset! bus seesaw/i2c-addr base-hex offset-hex)]
+    (if (= :ok (:status set-res))
+      (do
+        (Thread/sleep ^long (:i2c-read-delay-ms seesaw/config))
+        (fetch-i2c-read-bytes bus seesaw/i2c-addr bytes-len))
+      set-res)))
+
 (defn- read-seesaw-soil-reading
   "Generic reader for Seesaw Soil metrics using 2-step write, 10ms delay, and pure read."
   ([base-key offset-key bytes-len parse-fn]
@@ -139,15 +149,10 @@
   ([bus base-key offset-key bytes-len parse-fn]
    (let [base-hex   (format "0x%02X" (get seesaw/base-registers base-key))
          offset-hex (format "0x%02X" (get seesaw/function-offsets offset-key))
-         set-res    (write-i2cset! bus seesaw/i2c-addr base-hex offset-hex)]
-     (if (= :ok (:status set-res))
-       (do
-         (Thread/sleep ^long (:i2c-read-delay-ms seesaw/config))
-         (let [get-res (fetch-i2c-read-bytes bus seesaw/i2c-addr bytes-len)]
-           (if (= :ok (:status get-res))
-             (parse-fn (string/split (:out get-res) #"\s+"))
-             get-res)))
-       set-res))))
+         raw-res    (execute-seesaw-transfer bus base-hex offset-hex bytes-len)]
+     (if (= :ok (:status raw-res))
+       (parse-fn (string/split (:out raw-res) #"\s+"))
+       raw-res))))
 
 (defn- fetch-i2c-moisture-samples
   "Polls Seesaw I2C sensor N times with inter-sample delay and returns raw sample maps."
@@ -158,6 +163,13 @@
        (do (Thread/sleep inter-delay)
            (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))))))
 
+(defn- extract-sample-error
+  "Extracts the first I2C hardware error map from samples, or returns fallback error."
+  [samples]
+  (or (some #(when (= :error (:status %)) %) samples)
+      {:status        :error
+       :error/reason  :no-valid-moisture-samples}))
+
 (defn- read-seesaw-soil-moisture
   "Reads soil moisture from Adafruit Seesaw sensor using median and despike filtering over `sample-count` samples."
   ([] (read-seesaw-soil-moisture "1" (:moisture-samples seesaw/config)))
@@ -166,12 +178,10 @@
    (let [samples (fetch-i2c-moisture-samples bus sample-count)]
      (if-let [med-raw (seesaw/process-moisture-samples samples)]
        (let [{:keys [dry-adc wet-adc]} (:calibration seesaw/config)
-             calibrated (seesaw/raw->moisture-pct med-raw dry-adc wet-adc)]
+             pct (seesaw/raw->moisture-pct med-raw dry-adc wet-adc)]
          {:status   :ok
-          :readings [(format-reading :seesaw/moisture calibrated :percent med-raw)]})
-       (or (first (filter #(= :error (:status %)) samples))
-           {:status        :error
-            :error/reason  :no-valid-moisture-samples})))))
+          :readings [(format-reading :seesaw/moisture pct :percent med-raw)]})
+       (extract-sample-error samples)))))
 
 (defn- read-seesaw-soil-temperature
   "Reads soil temperature reading from Adafruit Seesaw sensor."
@@ -316,9 +326,9 @@
     {:dump dump
      :raw-adc raw
      :calibration calib
-     :readings {:temp (round-2 (:temp readings))
-                :press (round-2 (:press readings))
-                :hum (round-2 (:hum readings))}})
+     :readings {:temp (util/round-2 (:temp readings))
+                :press (util/round-2 (:press readings))
+                :hum (util/round-2 (:hum readings))}})
 
   (time (fig-ure.sensors/read-sensor-readings :bme280))
 
