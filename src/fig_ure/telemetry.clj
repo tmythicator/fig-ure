@@ -10,7 +10,7 @@
 
 (def config
   {:sensor-interval-ms 5000
-   :sensor-buf-size 200})
+   :sensor-buf-size    200})
 
 (defn- create-sensor-chan
   ([] (create-sensor-chan (:sensor-buf-size config)))
@@ -76,23 +76,24 @@
 (defn- start-telemetry-pipeline!
   [sys-config sensors-component]
   (let [stop-chan (async/chan)
-        sensor-chan (create-sensor-chan (:sensor-buf-size sys-config))
+        sensor-chan (create-sensor-chan (or (:sensor-buf-size sys-config) (:sensor-buf-size config)))
         bus (or (:i2c-bus sensors-component) "1")
         calib (:calibration sensors-component)
         bme280-produce #(sensors/read-sensor-readings :bme280 bus calib)
         seesaw-produce #(sensors/read-sensor-readings :seesaw bus)
-        cpu-produce    #(sensors/read-cpu-temperature)]
+        cpu-produce    #(sensors/read-cpu-temperature)
+        interval-ms    (or (:sensor-interval-ms sys-config) (:sensor-interval-ms config))]
 
     (start-sensor-producer! "BME280" sensor-chan stop-chan
-                            (:sensor-interval-ms sys-config)
+                            interval-ms
                             bme280-produce)
 
     (start-sensor-producer! "Seesaw" sensor-chan stop-chan
-                            (:sensor-interval-ms sys-config)
+                            interval-ms
                             seesaw-produce)
 
     (start-sensor-producer! "CPU" sensor-chan stop-chan
-                            (:sensor-interval-ms sys-config)
+                            interval-ms
                             cpu-produce)
 
     (start-telemetry-consumer! stop-chan sensor-chan sys-config)
