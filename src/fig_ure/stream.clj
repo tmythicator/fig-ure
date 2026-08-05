@@ -12,25 +12,29 @@
   {:timelapse-interval-ms 3600000 ;; 1 hour
    :auto-timelapse? true})
 
+(defn- take-snapshot-safely!
+  "Executes snapshot capture asynchronously and logs result."
+  []
+  (async/thread
+    (let [res (try
+                (camera/take-snapshot!)
+                (catch Exception e
+                  {:status        :error
+                   :error/reason  :execution-failed
+                   :error/message (.getMessage e)}))]
+      (if (= (:status res) :ok)
+        (util/log-message! "Stream Manager" (str "Timelapse snapshot saved: " (:file-path res)))
+        (util/log-message! "Stream Manager" (str "Timelapse snapshot failed: " (get-in res [:error :error/message])))))))
+
 (defn- start-timelapse-loop!
-  "Background worker loop for periodic timelapse snapshots."
+  "Background worker loop for periodic timelapse snapshots. Takes immediate initial snapshot."
   [stop-chan interval-ms]
+  (take-snapshot-safely!)
   (async/go-loop []
     (let [[_val port] (async/alts! [stop-chan (async/timeout interval-ms)])]
-      (if (= port stop-chan)
-        (util/log-message! "Stream Manager" "Stopped periodic timelapse worker.")
-        (do
-          (async/thread
-            (let [res (try
-                        (camera/take-snapshot!)
-                        (catch Exception e
-                          {:status        :error
-                           :error/reason  :execution-failed
-                           :error/message (.getMessage e)}))]
-              (if (= (:status res) :ok)
-                (util/log-message! "Stream Manager" (str "Timelapse snapshot saved: " (:file-path res)))
-                (util/log-message! "Stream Manager" (str "Timelapse snapshot failed: " (get-in res [:error :error/message]))))))
-          (recur))))))
+      (when-not (= port stop-chan)
+        (take-snapshot-safely!)
+        (recur)))))
 
 (defmethod ig/init-key :fig-ure/stream [_ sys-config]
   (let [opts      (merge config sys-config)
