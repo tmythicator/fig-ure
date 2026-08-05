@@ -50,15 +50,44 @@
 
 (deftest valid-moisture?-test
   (testing "validates capacitive moisture readings within physical range 250..2000"
-    (is (true? (seesaw/valid-moisture? 500)))
-    (is (true? (seesaw/valid-moisture? 1000)))
-    (is (false? (seesaw/valid-moisture? 122)) "Rejects underflow noise (< 250)")
-    (is (false? (seesaw/valid-moisture? 33771)) "Rejects byte-offset overflow noise (0x83EB)")
-    (is (false? (seesaw/valid-moisture? 65535)) "Rejects hardware bus-busy flag (0xFFFF)")
-    (is (false? (seesaw/valid-moisture? nil)))))
+    (is (true? (#'seesaw/valid-moisture? 500)))
+    (is (true? (#'seesaw/valid-moisture? 1000)))
+    (is (false? (#'seesaw/valid-moisture? 122)) "Rejects underflow noise (< 250)")
+    (is (false? (#'seesaw/valid-moisture? 33771)) "Rejects byte-offset overflow noise (0x83EB)")
+    (is (false? (#'seesaw/valid-moisture? 65535)) "Rejects hardware bus-busy flag (0xFFFF)")
+    (is (false? (#'seesaw/valid-moisture? nil)))))
 
 (deftest median-test
   (testing "computes median filtering on raw sequences"
-    (is (= 500 (seesaw/median [300 500 1000])))
-    (is (= 950 (seesaw/median [122 950 33771])))
-    (is (nil? (seesaw/median [])))))
+    (is (= 500 (#'seesaw/median [300 500 1000])))
+    (is (= 950 (#'seesaw/median [122 950 33771])))
+    (is (nil? (#'seesaw/median [])))))
+
+(deftest despike-samples-test
+  (testing "Filters out false max-saturation (>= 900) spikes when baseline readings (< 600) exist"
+    (is (= [340 342 345]
+           (#'seesaw/despike-samples [340 342 345 1015 1015 1016] 600.0 900.0))))
+
+  (testing "Preserves all readings when sensor is in water or saturated soil (min-val >= 600)"
+    (is (= [950 1015 1015 1016]
+           (#'seesaw/despike-samples [950 1015 1015 1016] 600.0 900.0))))
+
+  (testing "Preserves clean readings in normal soil without spikes"
+    (is (= [550 560 555]
+           (#'seesaw/despike-samples [550 560 555] 600.0 900.0))))
+
+  (testing "Handles empty sequence gracefully"
+    (is (= [] (#'seesaw/despike-samples [] 600.0 900.0)))
+    (is (nil? (#'seesaw/despike-samples nil 600.0 900.0)))))
+
+(deftest raw->moisture-pct-test
+  (testing "Normalizes raw capacitive moisture readings within bounds"
+    (is (= 0.0 (seesaw/raw->moisture-pct 340 340 1015)))
+    (is (= 100.0 (seesaw/raw->moisture-pct 1015 340 1015)))
+    (is (= 50.0 (seesaw/raw->moisture-pct 677.5 340 1015))))
+
+  (testing "Clamps values below dry baseline to 0.0"
+    (is (= 0.0 (seesaw/raw->moisture-pct 200 340 1015))))
+
+  (testing "Clamps values above wet baseline to 100.0"
+    (is (= 100.0 (seesaw/raw->moisture-pct 1200 340 1015)))))

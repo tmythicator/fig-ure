@@ -47,12 +47,12 @@
             ^long lsb (second parsed)]
         (bit-or (bit-shift-left msb 8) lsb)))))
 
-(defn valid-moisture?
+(defn- valid-moisture?
   "Checks if capacitive moisture reading is within valid sensor range."
   [val]
   (and (number? val) (<= 250 val 2000)))
 
-(defn median
+(defn- median
   "Calculates median value of a numerical sequence."
   [coll]
   (let [sorted (sort coll)
@@ -60,7 +60,7 @@
     (when (pos? cnt)
       (nth sorted (quot cnt 2)))))
 
-(defn despike-samples
+(defn- despike-samples
   "Filters out extreme max-saturation spikes (>= spike-threshold) from sample vector
    if baseline readings (< baseline-threshold) exist in the same sample window."
   [moisture-vals baseline-threshold spike-threshold]
@@ -74,35 +74,19 @@
       (if (seq filtered) filtered moisture-vals))
     moisture-vals))
 
-(defn raw->moisture-pct
-  "Normalizes raw capacitive ADC moisture reading into clamped percentage [0.0..100.0]."
-  [raw-val dry-adc wet-adc]
-  (let [calibrated (* 100.0 (/ (- (double raw-val) (double dry-adc))
-                               (- (double wet-adc) (double dry-adc))))]
-    (-> calibrated (max 0.0) (min 100.0))))
-
-(defn process-moisture-samples
-  "Filters raw sensor response maps, applies despiking, and returns median ADC moisture value."
+(defn- extract-valid-readings
+  "Filters successful I2C response maps and extracts valid moisture ADC numbers."
   [samples]
-  (let [{:keys [dry-context-max-adc noise-spike-min-adc]} (:calibration config)
-        valids (->> samples
-                    (filter #(= :ok (:status %)))
-                    (map :moisture)
-                    (filter valid-moisture?)
-                    (#(despike-samples % dry-context-max-adc noise-spike-min-adc)))]
-    (median valids)))
+  (->> samples
+       (filter #(= :ok (:status %)))
+       (map :moisture)
+       (filter valid-moisture?)))
 
-(defn parse-soil-moisture
-  "Parses 2-byte response into soil moisture reading map."
-  [byte-strs]
-  (if (and (coll? byte-strs) (= 2 (count byte-strs)))
-    (if-let [val (parse-raw-moisture-bytes (first byte-strs) (second byte-strs))]
-      {:status   :ok
-       :moisture val}
-      {:status        :error
-       :error/reason  :invalid-bytes})
-    {:status        :error
-     :error/reason  :invalid-response-length}))
+(defn- clean-moisture-samples
+  "Extracts valid moisture readings from samples and filters out false noise spikes."
+  [samples dry-context-max spike-min]
+  (-> (extract-valid-readings samples)
+      (despike-samples dry-context-max spike-min)))
 
 (defn- parse-raw-temperature-bytes
   [b1 b2 b3 b4]
@@ -119,6 +103,33 @@
                      b4-hex)
             two-pow-16 65536.0]
         (/ raw-int two-pow-16)))))
+
+(defn raw->moisture-pct
+  "Normalizes raw capacitive ADC moisture reading into clamped percentage [0.0..100.0]."
+  [raw-val dry-adc wet-adc]
+  (let [calibrated (* 100.0 (/ (- (double raw-val) (double dry-adc))
+                               (- (double wet-adc) (double dry-adc))))]
+    (-> calibrated (max 0.0) (min 100.0))))
+
+(defn process-moisture-samples
+  "Filters raw sensor response maps, applies despiking, and returns median ADC moisture value."
+  [samples]
+  (let [{:keys [dry-context-max-adc noise-spike-min-adc]} (:calibration config)]
+    (-> samples
+        (clean-moisture-samples dry-context-max-adc noise-spike-min-adc)
+        (median))))
+
+(defn parse-soil-moisture
+  "Parses 2-byte response into soil moisture reading map."
+  [byte-strs]
+  (if (and (coll? byte-strs) (= 2 (count byte-strs)))
+    (if-let [val (parse-raw-moisture-bytes (first byte-strs) (second byte-strs))]
+      {:status   :ok
+       :moisture val}
+      {:status        :error
+       :error/reason  :invalid-bytes})
+    {:status        :error
+     :error/reason  :invalid-response-length}))
 
 (defn parse-soil-temperature
   "Parses 4-byte response into soil temperature reading map."
