@@ -62,8 +62,10 @@
 
 (defn- format-reading
   "Delegates to domain/make-reading."
-  [sensor-id raw-val unit]
-  (domain/make-reading sensor-id raw-val unit))
+  ([sensor-id val unit]
+   (domain/make-reading sensor-id val unit))
+  ([sensor-id val unit raw-val]
+   (domain/make-reading sensor-id val unit raw-val)))
 
 ;; =============================================================================
 ;; 2. SENSOR READERS
@@ -147,21 +149,26 @@
              get-res)))
        set-res))))
 
+(defn- fetch-i2c-moisture-samples
+  "Polls Seesaw I2C sensor N times with inter-sample delay and returns raw sample maps."
+  [bus sample-count]
+  (let [inter-delay ^long (:inter-sample-delay-ms seesaw/config)]
+    (doall
+     (for [_ (range sample-count)]
+       (do (Thread/sleep inter-delay)
+           (read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))))))
+
 (defn- read-seesaw-soil-moisture
-  "Reads soil moisture from Adafruit Seesaw sensor using median filtering over `sample-count` samples."
+  "Reads soil moisture from Adafruit Seesaw sensor using median and despike filtering over `sample-count` samples."
   ([] (read-seesaw-soil-moisture "1" (:moisture-samples seesaw/config)))
   ([bus] (read-seesaw-soil-moisture bus (:moisture-samples seesaw/config)))
   ([bus sample-count]
-   (let [n-samples (or sample-count (:moisture-samples seesaw/config))
-         samples (repeatedly n-samples #(read-seesaw-soil-reading bus :touch :moisture 2 seesaw/parse-soil-moisture))
-         valids  (->> samples
-                      (filter #(= :ok (:status %)))
-                      (map :moisture)
-                      (filter seesaw/valid-moisture?))
-         med-val (seesaw/median valids)]
-     (if med-val
-       {:status   :ok
-        :readings [(format-reading :seesaw/moisture med-val :capacitive)]}
+   (let [samples (fetch-i2c-moisture-samples bus sample-count)]
+     (if-let [med-raw (seesaw/process-moisture-samples samples)]
+       (let [{:keys [dry-adc wet-adc]} (:calibration seesaw/config)
+             calibrated (seesaw/raw->moisture-pct med-raw dry-adc wet-adc)]
+         {:status   :ok
+          :readings [(format-reading :seesaw/moisture calibrated :percent med-raw)]})
        (or (first (filter #(= :error (:status %)) samples))
            {:status        :error
             :error/reason  :no-valid-moisture-samples})))))

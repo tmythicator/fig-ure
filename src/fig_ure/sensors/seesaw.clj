@@ -21,10 +21,15 @@
 
 (def config
   "Adafruit Seesaw default configuration and expected hardware ID."
-  {:hardware-id-val   "0x36"
-   :default-bus       "1"
-   :i2c-read-delay-ms 10
-   :moisture-samples  3})
+  {:hardware-id-val        "0x36"
+   :default-bus            "1"
+   :i2c-read-delay-ms      25
+   :moisture-samples       7
+   :inter-sample-delay-ms  10
+   :calibration            {:dry-adc              340
+                            :wet-adc              1015
+                            :dry-context-max-adc  600
+                            :noise-spike-min-adc  900}})
 
 (defn decode-hardware-id
   "Decodes raw hardware ID from Seesaw chip and checks if valid (0x36)."
@@ -54,6 +59,38 @@
         cnt    (count sorted)]
     (when (pos? cnt)
       (nth sorted (quot cnt 2)))))
+
+(defn despike-samples
+  "Filters out extreme max-saturation spikes (>= spike-threshold) from sample vector
+   if baseline readings (< baseline-threshold) exist in the same sample window."
+  [moisture-vals baseline-threshold spike-threshold]
+  (if (seq moisture-vals)
+    (let [base-thresh  ^long (long baseline-threshold)
+          spike-thresh ^long (long spike-threshold)
+          min-val      ^long (long (apply min moisture-vals))
+          filtered     (if (< min-val base-thresh)
+                         (filter #(< (long %) spike-thresh) moisture-vals)
+                         moisture-vals)]
+      (if (seq filtered) filtered moisture-vals))
+    moisture-vals))
+
+(defn raw->moisture-pct
+  "Normalizes raw capacitive ADC moisture reading into clamped percentage [0.0..100.0]."
+  [raw-val dry-adc wet-adc]
+  (let [calibrated (* 100.0 (/ (- (double raw-val) (double dry-adc))
+                               (- (double wet-adc) (double dry-adc))))]
+    (-> calibrated (max 0.0) (min 100.0))))
+
+(defn process-moisture-samples
+  "Filters raw sensor response maps, applies despiking, and returns median ADC moisture value."
+  [samples]
+  (let [{:keys [dry-context-max-adc noise-spike-min-adc]} (:calibration config)
+        valids (->> samples
+                    (filter #(= :ok (:status %)))
+                    (map :moisture)
+                    (filter valid-moisture?)
+                    (#(despike-samples % dry-context-max-adc noise-spike-min-adc)))]
+    (median valids)))
 
 (defn parse-soil-moisture
   "Parses 2-byte response into soil moisture reading map."
