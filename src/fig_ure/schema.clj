@@ -5,8 +5,8 @@
             [malli.generator :as mg]))
 
 (def SoilMoistureValue
-  "Defined by official Seesaw Spec."
-  [:int {:min 250 :max 2000}])
+  "Calibrated soil moisture percentage."
+  [:double {:min 0.0 :max 100.0}])
 
 (def TemperatureValue
   "Defined by official BME280 + Seesaw Spec."
@@ -43,26 +43,31 @@
    [:map {:closed true}
     [:sensor/id [:= :seesaw/moisture]]
     [:sensor/value SoilMoistureValue]
-    [:sensor/unit [:= :capacitive]]
+    [:sensor/raw-value {:optional true} number?]
+    [:sensor/unit [:= :percent]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
     [:sensor/id [:enum :bme280/temperature :seesaw/temperature :cpu/temperature]]
     [:sensor/value TemperatureValue]
+    [:sensor/raw-value {:optional true} number?]
     [:sensor/unit [:= :celsius]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
     [:sensor/id [:= :bme280/pressure]]
     [:sensor/value PressureValue]
+    [:sensor/raw-value {:optional true} number?]
     [:sensor/unit [:= :hpa]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
     [:sensor/id [:= :bme280/humidity]]
     [:sensor/value HumidityValue]
+    [:sensor/raw-value {:optional true} number?]
     [:sensor/unit [:= :percent]]
     [:sensor/timestamp int?]]
    [:map {:closed true}
     [:sensor/id [:= :camera/snapshot]]
     [:sensor/value string?]
+    [:sensor/raw-value {:optional true} number?]
     [:sensor/unit [:= :file]]
     [:sensor/timestamp int?]]])
 

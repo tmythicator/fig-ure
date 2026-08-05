@@ -15,16 +15,15 @@
     (round-2 val)
     val))
 
-(defmethod format-sensor-value :seesaw/moisture [_ val]
-  val)
-
 (defn make-reading
   "Domain factory function to create a standardized telemetry reading map."
-  [sensor-id raw-val unit]
-  {:sensor/id        sensor-id
-   :sensor/value     (format-sensor-value sensor-id raw-val)
-   :sensor/unit      unit
-   :sensor/timestamp (System/currentTimeMillis)})
+  ([sensor-id val unit] (make-reading sensor-id val unit nil))
+  ([sensor-id val unit raw-val]
+   (cond-> {:sensor/id        sensor-id
+            :sensor/value     (format-sensor-value sensor-id val)
+            :sensor/unit      unit
+            :sensor/timestamp (System/currentTimeMillis)}
+     raw-val (assoc :sensor/raw-value raw-val))))
 
 (defn make-telemetry-data-event
   "Domain factory for successful telemetry producer event."
@@ -55,15 +54,18 @@
 (defn reading->line-protocol
   "Transforms a SensorReading into a single Line Protocol line string.
    Returns formatted string, or nil if reading is invalid or non-numeric."
-  [{:keys [sensor/id sensor/value sensor/unit sensor/timestamp] :as _reading}]
+  [{:keys [sensor/id sensor/value sensor/raw-value sensor/unit sensor/timestamp] :as _reading}]
   (when (and id value unit timestamp)
     (when-let [val-str (format-line-protocol-values value)]
       (let [id-str (if (keyword? id) (subs (str id) 1) (str id))
-            unit-str (if (keyword? unit) (name unit) (str unit))]
-        (format "telemetry,sensor_id=%s,unit=%s value=%s %d"
+            unit-str (if (keyword? unit) (name unit) (str unit))
+            fields-str (if-let [raw-str (and raw-value (format-line-protocol-values raw-value))]
+                         (format "value=%s,raw_value=%s" val-str raw-str)
+                         (format "value=%s" val-str))]
+        (format "telemetry,sensor_id=%s,unit=%s %s %d"
                 id-str
                 unit-str
-                val-str
+                fields-str
                 timestamp)))))
 
 (defn readings->payload
