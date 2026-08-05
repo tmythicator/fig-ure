@@ -97,16 +97,16 @@
                            (= cmd "i2ctransfer") (let [c (swap! counter inc)]
                                                    (case c
                                                      1 {:exit 0 :out "0x83 0xeb" :err ""} ;; 33771 (Garbage noise)
-                                                     2 {:exit 0 :out "0x01 0xf4" :err ""} ;; 500   (Valid reading -> 23.7%)
+                                                     2 {:exit 0 :out "0x02 0xbc" :err ""} ;; 700   (Valid reading -> 38.8%)
                                                      3 {:exit 0 :out "0x00 0x7a" :err ""} ;; 122   (Underflow noise)
-                                                     {:exit 0 :out "0x01 0xf4" :err ""}))
+                                                     {:exit 0 :out "0x02 0xbc" :err ""}))
                            :else {:exit 0 :out "" :err ""}))]
         (let [res (sensors/read-sensor-readings :seesaw/moisture)]
           (is (schema/valid? schema/SensorResponse res))
           (is (match? {:status :ok
                        :readings [{:sensor/id        :seesaw/moisture
-                                   :sensor/value     23.7
-                                   :sensor/raw-value 500
+                                   :sensor/value     38.83
+                                   :sensor/raw-value 700
                                    :sensor/unit      :percent}]}
                       res))))))
 

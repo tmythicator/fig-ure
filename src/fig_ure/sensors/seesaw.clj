@@ -26,10 +26,11 @@
    :i2c-read-delay-ms      25
    :moisture-samples       7
    :inter-sample-delay-ms  10
-   :calibration            {:dry-adc              340
-                            :wet-adc              1015
-                            :dry-context-max-adc  600
-                            :noise-spike-min-adc  900}})
+   :calibration            {:dry-adc              500 ;; Very dry soil
+                            :wet-adc              1015 ;; Freshly watered soils
+                            :dry-context-max-adc  600 ;; Higher readings ignored (interpreted as sensor noise)
+                            :noise-spike-min-adc  900 ;; Upper bound for "okay" readings
+                            }})
 
 (defn decode-hardware-id
   "Decodes raw hardware ID from Seesaw chip and checks if valid (0x36)."
